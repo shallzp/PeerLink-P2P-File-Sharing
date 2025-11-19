@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">PeerLink</string>
+    <string name="app_description">A Peer-to-Peer File Sharing App</string>
+    <string name="discover_btn">Discover Devices</string>
+    <string name="send_btn">Send Files</string>
+    <string name="recieve_btn">Recieve Files</string>
+</resources>
