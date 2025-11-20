@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.net.wifi.p2p.WifiP2pConfig;
 import android.net.wifi.p2p.WifiP2pDevice;
 import android.net.wifi.p2p.WifiP2pDeviceList;
 import android.net.wifi.p2p.WifiP2pManager;
@@ -75,6 +76,11 @@ public class AvailableDevicesActivity extends AppCompatActivity implements
         }
 
         devicesAdapter = new DevicesAdapter(peers);
+
+        devicesAdapter.setOnDeviceConnectListener(device -> {
+            connectToDevice(device);
+        });
+
         rvDevices.setLayoutManager(new LinearLayoutManager(this));
         rvDevices.setAdapter(devicesAdapter);
 
@@ -93,20 +99,29 @@ public class AvailableDevicesActivity extends AppCompatActivity implements
     }
 
     private void startPermissionAndDiscovery() {
-        // Request required permissions (Location needed for discovery)
         List<String> permissionsNeeded = new ArrayList<>();
+
+        // Request location permissions as before (needed for all versions)
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             permissionsNeeded.add(Manifest.permission.ACCESS_FINE_LOCATION);
         }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             permissionsNeeded.add(Manifest.permission.ACCESS_COARSE_LOCATION);
         }
-        if (permissionsNeeded.size() > 0) {
+        // Request NEARBY_WIFI_DEVICES for Android 13+ (API 33)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED) {
+                permissionsNeeded.add(Manifest.permission.NEARBY_WIFI_DEVICES);
+            }
+        }
+
+        if (!permissionsNeeded.isEmpty()) {
             requestPermissionsLauncher.launch(permissionsNeeded.toArray(new String[0]));
         } else {
             discoverPeers();
         }
     }
+
 
     private void discoverPeers() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.NEARBY_WIFI_DEVICES)
@@ -120,7 +135,21 @@ public class AvailableDevicesActivity extends AppCompatActivity implements
 
                     @Override
                     public void onFailure(int reason) {
-                        Toast.makeText(AvailableDevicesActivity.this, "Discovery Failed: " + reason, Toast.LENGTH_SHORT).show();
+                        String message;
+                        switch (reason) {
+                            case WifiP2pManager.P2P_UNSUPPORTED:
+                                message = "Wi-Fi Direct is not supported on this device.";
+                                break;
+                            case WifiP2pManager.BUSY:
+                                message = "Wi-Fi system busy. Please wait and try again.";
+                                // Optionally add a retry after delay as above
+                                break;
+                            case WifiP2pManager.ERROR:
+                            default:
+                                message = "Discovery failed due to an internal error. Please try again.";
+                                break;
+                        }
+                        Toast.makeText(AvailableDevicesActivity.this, message, Toast.LENGTH_LONG).show();
                     }
                 });
             }
@@ -128,6 +157,47 @@ public class AvailableDevicesActivity extends AppCompatActivity implements
             // Permission not granted; request permission or inform user
             Toast.makeText(this, "Permission to access nearby Wi-Fi devices is required.", Toast.LENGTH_LONG).show();
             // Optionally trigger your permission request here if not already requested
+        }
+    }
+
+    private void connectToDevice(WifiP2pDevice device) {
+        WifiP2pManager.ActionListener actionListener = new WifiP2pManager.ActionListener() {
+            @Override
+            public void onSuccess() {
+                Toast.makeText(AvailableDevicesActivity.this,
+                        "Connection request sent to " + device.deviceName, Toast.LENGTH_SHORT).show();
+            }
+            @Override
+            public void onFailure(int reason) {
+                String reasonStr;
+                switch (reason) {
+                    case WifiP2pManager.P2P_UNSUPPORTED: reasonStr = "Wi-Fi Direct not supported"; break;
+                    case WifiP2pManager.BUSY: reasonStr = "System busy or already connecting"; break;
+                    case WifiP2pManager.ERROR:
+                    default: reasonStr = "Internal error, try again";
+                }
+                Toast.makeText(AvailableDevicesActivity.this,
+                        "Connection failed: " + reasonStr, Toast.LENGTH_LONG).show();
+            }
+        };
+
+        WifiP2pConfig config = new WifiP2pConfig();
+        config.deviceAddress = device.deviceAddress;
+        // Optionally: config.wps.setup = WpsInfo.PBC (if available)
+
+        // Check permissions before connecting
+        boolean hasPermission;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            hasPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED;
+        } else {
+            hasPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        }
+
+        if (hasPermission) {
+            manager.connect(channel, config, actionListener);
+        } else {
+            Toast.makeText(this, "Wi-Fi Direct permission required to connect.", Toast.LENGTH_SHORT).show();
+            // Optionally request permissions here
         }
     }
 
