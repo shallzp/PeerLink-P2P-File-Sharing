@@ -6,13 +6,10 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
-
 import androidx.annotation.NonNull;
 import androidx.cardview.widget.CardView;
 import androidx.recyclerview.widget.RecyclerView;
-
 import com.example.peerlink.R;
-
 import java.util.List;
 
 public class DevicesAdapter extends RecyclerView.Adapter<DevicesAdapter.DeviceViewHolder> {
@@ -55,7 +52,6 @@ public class DevicesAdapter extends RecyclerView.Adapter<DevicesAdapter.DeviceVi
     @Override
     public void onBindViewHolder(@NonNull DeviceViewHolder holder, int position) {
         WifiP2pDevice device = devices.get(position);
-
         holder.tvDeviceName.setText(device.deviceName);
 
         // Update UI based on connection status
@@ -72,7 +68,6 @@ public class DevicesAdapter extends RecyclerView.Adapter<DevicesAdapter.DeviceVi
                     disconnectListener.onDeviceDisconnectClicked(device);
                 }
             });
-
         } else if (device.status == WifiP2pDevice.INVITED) {
             // Device invitation sent - show "Connecting..." status
             holder.tvConnectButton.setText("Connecting...");
@@ -80,7 +75,6 @@ public class DevicesAdapter extends RecyclerView.Adapter<DevicesAdapter.DeviceVi
             holder.btnConnect.setEnabled(false);
             holder.btnConnect.setClickable(false);
             holder.btnConnect.setOnClickListener(null);
-
         } else {
             // Device is available - show "Connect" button
             holder.tvConnectButton.setText("Connect");

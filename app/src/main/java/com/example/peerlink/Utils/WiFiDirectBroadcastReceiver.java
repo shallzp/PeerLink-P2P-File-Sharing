@@ -8,9 +8,7 @@ import android.content.pm.PackageManager;
 import android.net.NetworkInfo;
 import android.net.wifi.p2p.WifiP2pManager;
 import android.widget.Toast;
-
 import androidx.core.content.ContextCompat;
-
 import com.example.peerlink.Activity.AvailableDevicesActivity;
 
 public class WiFiDirectBroadcastReceiver extends BroadcastReceiver {
@@ -38,7 +36,6 @@ public class WiFiDirectBroadcastReceiver extends BroadcastReceiver {
             } else {
                 Toast.makeText(context, "Wi-Fi P2P Disabled", Toast.LENGTH_SHORT).show();
             }
-
         } else if (WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION.equals(action)) {
             // Request the updated peer list with permission check
             if (manager != null) {
@@ -54,9 +51,7 @@ public class WiFiDirectBroadcastReceiver extends BroadcastReceiver {
                 if (hasPermission) {
                     manager.requestPeers(channel, activity);
                 } else {
-                    Toast.makeText(context,
-                            "Permission required to access nearby Wi-Fi devices", Toast.LENGTH_SHORT).show();
-                    // Optionally notify activity to request permission here
+                    Toast.makeText(context, "Permission required to access nearby Wi-Fi devices", Toast.LENGTH_SHORT).show();
                 }
             }
         } else if (WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION.equals(action)) {

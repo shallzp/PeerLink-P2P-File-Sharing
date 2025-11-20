@@ -5,23 +5,20 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
-
 import com.example.peerlink.R;
-
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.ExecutorService;
@@ -50,6 +47,7 @@ public class ReceiveFileActivity extends AppCompatActivity {
     private CardView progressSection;
     private TextView tvProgressFileName, tvProgressPercent, tvProgressDetails, tvTransferSpeed;
     private View progressBar;
+    private View progressBarParent; // ADDED: Reference to parent view
     private ImageView btnCancelReceiving;
 
     // UI Elements - Connection Status
@@ -84,7 +82,6 @@ public class ReceiveFileActivity extends AppCompatActivity {
         // Get connection info from intent
         String connectedDeviceIp = getIntent().getStringExtra("DEVICE_IP");
         String connectedDeviceName = getIntent().getStringExtra("DEVICE_NAME");
-
         if (connectedDeviceName != null) {
             senderDeviceName = connectedDeviceName;
         }
@@ -118,6 +115,7 @@ public class ReceiveFileActivity extends AppCompatActivity {
         tvProgressDetails = findViewById(R.id.tvProgressDetails);
         tvTransferSpeed = findViewById(R.id.tvTransferSpeed);
         progressBar = findViewById(R.id.progressBar);
+        progressBarParent = findViewById(R.id.progressBarContainer); // ADDED: Get parent container
         btnCancelReceiving = findViewById(R.id.btnCancelReceiving);
 
         // Status
@@ -166,7 +164,6 @@ public class ReceiveFileActivity extends AppCompatActivity {
         executor.execute(() -> {
             try {
                 serverSocket = new ServerSocket(SERVER_PORT);
-
                 mainHandler.post(() -> {
                     Toast.makeText(this, "Listening on port " + SERVER_PORT, Toast.LENGTH_SHORT).show();
                     updateConnectionStatus("Ready", android.R.color.holo_green_dark);
@@ -176,7 +173,6 @@ public class ReceiveFileActivity extends AppCompatActivity {
                 while (isListening.get()) {
                     // Wait for incoming connection
                     clientSocket = serverSocket.accept();
-
                     mainHandler.post(() ->
                             updateConnectionStatus("Connected", android.R.color.holo_green_dark));
 
@@ -248,7 +244,6 @@ public class ReceiveFileActivity extends AppCompatActivity {
 
         // Show incoming file state
         showIncomingFileState();
-
         Toast.makeText(this, "Incoming file from " + senderDeviceName, Toast.LENGTH_SHORT).show();
     }
 
@@ -266,7 +261,6 @@ public class ReceiveFileActivity extends AppCompatActivity {
                 // Send ACCEPT response to sender
                 dataOutputStream.writeUTF("ACCEPT");
                 dataOutputStream.flush();
-
                 android.util.Log.d("ReceiveFile", "Sent ACCEPT response");
 
                 mainHandler.post(() -> {
@@ -278,7 +272,6 @@ public class ReceiveFileActivity extends AppCompatActivity {
                 // IMPORTANT: Close the metadata socket
                 // Sender will create a NEW connection for file transfer
                 closeSocket();
-
                 android.util.Log.d("ReceiveFile", "Closed metadata socket, waiting for new connection...");
 
                 // Wait for NEW connection from TransferProgressActivity
@@ -325,7 +318,6 @@ public class ReceiveFileActivity extends AppCompatActivity {
 
             // Create your app's custom folder
             File peerLinkFolder = new File(documentsDir, "PeerLink");
-
             if (!peerLinkFolder.exists()) {
                 boolean created = peerLinkFolder.mkdirs();
                 android.util.Log.d("ReceiveFile", "PeerLink folder created: " + created +
@@ -357,11 +349,9 @@ public class ReceiveFileActivity extends AppCompatActivity {
             }
 
             FileOutputStream fos = new FileOutputStream(finalOutputFile);
-
             byte[] buffer = new byte[BUFFER_SIZE];
             long totalReceived = 0;
             int bytesRead;
-
             long startTime = System.currentTimeMillis();
             long lastUpdateTime = startTime;
 
@@ -383,9 +373,7 @@ public class ReceiveFileActivity extends AppCompatActivity {
                 if (currentTime - lastUpdateTime >= 200) {
                     final long received = totalReceived;
                     final long elapsed = currentTime - startTime;
-
                     mainHandler.post(() -> updateProgress(received, elapsed));
-
                     lastUpdateTime = currentTime;
                 }
             }
@@ -404,19 +392,13 @@ public class ReceiveFileActivity extends AppCompatActivity {
             // Transfer complete
             if (totalReceived >= incomingFileSize) {
                 final long totalTime = System.currentTimeMillis() - startTime;
-                final String savedPath = finalOutputFile.getAbsolutePath();
-                final String folderPath = peerLinkFolder.getAbsolutePath();
-
                 mainHandler.post(() -> {
                     Toast.makeText(this, "File saved successfully!\nDocuments/PeerLink/" +
                             finalOutputFile.getName(), Toast.LENGTH_LONG).show();
-
                     updateProgress(incomingFileSize, totalTime);
-
                     tvProgressPercent.setText("100%");
                     tvProgressPercent.setTextColor(
                             getResources().getColor(android.R.color.holo_green_dark));
-
                     mainHandler.postDelayed(this::resetToWaitingState, 3000);
                 });
             } else {
@@ -458,27 +440,28 @@ public class ReceiveFileActivity extends AppCompatActivity {
 
     private void updateProgress(long received, long elapsedMs) {
         // Calculate percentage
-        int percentage = (int) ((received * 100) / incomingFileSize);
+        int percentage = incomingFileSize > 0 ? (int) ((received * 100) / incomingFileSize) : 0;
+        percentage = Math.min(percentage, 100);
 
-        // Update progress bar width
+        // FIXED: Get parent width properly
         int parentWidth = 0;
-        if (progressBar.getParent() != null) {
-            parentWidth = ((View) progressBar.getParent()).getWidth();
+        if (progressBarParent != null) {
+            parentWidth = progressBarParent.getWidth();
         }
 
-        int progressWidth = parentWidth > 0 ?
-                (int) ((received * parentWidth) / incomingFileSize) : 0;
-
-        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) progressBar.getLayoutParams();
-        params.width = progressWidth;
-        progressBar.setLayoutParams(params);
+        // Update progress bar width
+        if (parentWidth > 0 && received > 0 && incomingFileSize > 0) {
+            int progressWidth = (int) ((received * parentWidth) / incomingFileSize);
+            FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) progressBar.getLayoutParams();
+            params.width = progressWidth;
+            progressBar.setLayoutParams(params);
+        }
 
         // Update percentage text
         tvProgressPercent.setText(percentage + "%");
 
         // Update data transferred
-        tvProgressDetails.setText(formatFileSize(received) + " / " +
-                formatFileSize(incomingFileSize));
+        tvProgressDetails.setText(formatFileSize(received) + " / " + formatFileSize(incomingFileSize));
 
         // Calculate and update speed
         if (elapsedMs > 0) {
@@ -554,25 +537,10 @@ public class ReceiveFileActivity extends AppCompatActivity {
 
     private void setFileIcon(String type) {
         int iconRes = R.drawable.ic_file_large;
-
         if (type != null) {
             type = type.toLowerCase();
-            if (type.contains("pdf")) {
-                iconRes = R.drawable.ic_file_large;
-            } else if (type.contains("jpg") || type.contains("jpeg") ||
-                    type.contains("png") || type.contains("image")) {
-                iconRes = R.drawable.ic_file_large;
-            } else if (type.contains("doc") || type.contains("txt")) {
-                iconRes = R.drawable.ic_file_large;
-            } else if (type.contains("mp4") || type.contains("avi") ||
-                    type.contains("video")) {
-                iconRes = R.drawable.ic_file_large;
-            } else if (type.contains("mp3") || type.contains("wav") ||
-                    type.contains("audio")) {
-                iconRes = R.drawable.ic_file_large;
-            }
+            // You can add specific icons for different file types
         }
-
         ivIncomingFilePreview.setImageResource(iconRes);
     }
 
@@ -596,7 +564,6 @@ public class ReceiveFileActivity extends AppCompatActivity {
         super.onDestroy();
         isListening.set(false);
         isReceiving.set(false);
-
         closeSocket();
 
         try {

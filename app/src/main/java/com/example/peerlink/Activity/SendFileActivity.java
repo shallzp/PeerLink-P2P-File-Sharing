@@ -12,14 +12,11 @@ import android.webkit.MimeTypeMap;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
-
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
-
 import com.example.peerlink.R;
-
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.InetSocketAddress;
@@ -53,7 +50,7 @@ public class SendFileActivity extends AppCompatActivity {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    // File picker launcher
+    // File picker launcher - FIXED TYPE
     private final ActivityResultLauncher<Intent> filePickerLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
                 if (result.getResultCode() == RESULT_OK && result.getData() != null) {
@@ -188,7 +185,6 @@ public class SendFileActivity extends AppCompatActivity {
         filePreviewCard.setVisibility(View.GONE);
         btnStartTransfer.setEnabled(false);
         btnStartTransfer.setAlpha(0.5f);
-
         tvReceiverStatus.setText("Ready to receive");
         statusIndicator.setBackgroundTintList(
                 getResources().getColorStateList(android.R.color.holo_orange_light));
@@ -200,16 +196,14 @@ public class SendFileActivity extends AppCompatActivity {
     }
 
     // Step 1: Send file metadata to receiver
-    // Step 1: Send file metadata to receiver
     private void sendFileMetadata() {
         updateReceiverStatus("Connecting to receiver...");
         btnStartTransfer.setEnabled(false);
 
         executor.execute(() -> {
-            Socket socket = null;  // Declare at method scope
+            Socket socket = null;
             DataOutputStream dos = null;
             DataInputStream dis = null;
-
             int maxRetries = 3;
             int retryCount = 0;
 
@@ -325,7 +319,6 @@ public class SendFileActivity extends AppCompatActivity {
             } catch (Exception e) {
                 e.printStackTrace();
                 android.util.Log.e("SendFile", "Metadata exchange error: " + e.getMessage());
-
                 final String errorMsg = e.getMessage();
                 mainHandler.post(() -> {
                     updateReceiverStatus("Error during transfer");
@@ -334,29 +327,20 @@ public class SendFileActivity extends AppCompatActivity {
                     statusIndicator.setBackgroundTintList(
                             getResources().getColorStateList(android.R.color.holo_red_dark));
                 });
-
             } finally {
                 // Close all resources in finally block
                 try {
-                    if (dos != null) {
-                        dos.close();
-                    }
+                    if (dos != null) dos.close();
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
-
                 try {
-                    if (dis != null) {
-                        dis.close();
-                    }
+                    if (dis != null) dis.close();
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
-
                 try {
-                    if (socket != null && !socket.isClosed()) {
-                        socket.close();
-                    }
+                    if (socket != null && !socket.isClosed()) socket.close();
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -439,7 +423,6 @@ public class SendFileActivity extends AppCompatActivity {
 
     private void setFileIcon(String type) {
         int iconRes = R.drawable.ic_file_large;
-
         if (type != null) {
             type = type.toLowerCase();
             if (type.contains("pdf")) {
@@ -457,7 +440,6 @@ public class SendFileActivity extends AppCompatActivity {
                 iconRes = R.drawable.ic_file_large;
             }
         }
-
         ivFilePreview.setImageResource(iconRes);
     }
 
