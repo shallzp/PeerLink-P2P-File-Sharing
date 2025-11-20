@@ -22,293 +22,441 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
-    <!-- Main Content Container -->
-    <LinearLayout
-        android:id="@+id/contentContainer"
-        android:layout_width="0dp"
+    <!-- Status Badge -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/statusBadge"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:layout_marginStart="32dp"
-        android:layout_marginEnd="32dp"
-        android:layout_marginTop="60dp"
+        android:layout_marginTop="12dp"
+        app:cardCornerRadius="12dp"
+        app:cardBackgroundColor="#4CAF50"
+        app:cardElevation="0dp"
         app:layout_constraintTop_toBottomOf="@id/tvTitle"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- File Status Section -->
-        <androidx.cardview.widget.CardView
-            android:id="@+id/fileStatusCard"
+        <TextView
+            android:id="@+id/tvConnectionStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Connected"
+            android:textSize="12sp"
+            android:textColor="#FFFFFF"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"/>
+
+    </androidx.cardview.widget.CardView>
+
+    <ScrollView
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="24dp"
+        app:layout_constraintTop_toBottomOf="@id/statusBadge"
+        app:layout_constraintBottom_toTopOf="@id/progressSection"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:id="@+id/contentContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="40dp"
-            app:cardCornerRadius="16dp"
-            app:cardBackgroundColor="#3D5170"
-            app:cardElevation="4dp">
+            android:orientation="vertical"
+            android:paddingStart="32dp"
+            android:paddingEnd="32dp"
+            android:paddingBottom="24dp">
 
+            <!-- Waiting Animation Indicator (Initial State) -->
             <LinearLayout
+                android:id="@+id/waitingIndicator"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="20dp">
+                android:gravity="center"
+                android:padding="40dp">
+
+                <ProgressBar
+                    android:id="@+id/progressWaiting"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:indeterminateTint="#5B9FED"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Listening for incoming files..."
+                    android:textSize="14sp"
+                    android:textColor="#8A9BAE"
+                    android:layout_marginTop="16dp"
+                    android:textAlignment="center"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Make sure sender has selected a file"
+                    android:textSize="12sp"
+                    android:textColor="#6A7B8E"
+                    android:layout_marginTop="8dp"
+                    android:textAlignment="center"/>
+
+            </LinearLayout>
+
+            <!-- Incoming File Card (Visible when file is detected) -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/incomingFileCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                app:cardCornerRadius="20dp"
+                app:cardBackgroundColor="#FFFFFF"
+                app:cardElevation="8dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
+                    android:orientation="vertical"
+                    android:padding="24dp">
+
+                    <!-- Badge for incoming file -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="📥 Incoming File"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:textColor="#FF9966"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:paddingTop="6dp"
+                        android:paddingBottom="6dp"
+                        android:background="@drawable/badge_bg"
+                        android:layout_gravity="start"/>
 
                     <ImageView
-                        android:id="@+id/ivFileIcon"
-                        android:layout_width="40dp"
-                        android:layout_height="40dp"
-                        android:src="@drawable/ic_file_incoming"
-                        app:tint="#8A9BAE"/>
+                        android:id="@+id/ivIncomingFilePreview"
+                        android:layout_width="80dp"
+                        android:layout_height="80dp"
+                        android:layout_gravity="center_horizontal"
+                        android:layout_marginTop="16dp"
+                        android:src="@drawable/ic_file_large"
+                        app:tint="#FF9966"/>
 
-                    <LinearLayout
-                        android:layout_width="0dp"
+                    <TextView
+                        android:id="@+id/tvIncomingFileName"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:layout_marginStart="16dp">
+                        android:text="document.pdf"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:textColor="#2C3E5F"
+                        android:layout_marginTop="16dp"
+                        android:maxLines="2"
+                        android:ellipsize="middle"
+                        android:textAlignment="center"/>
 
-                        <TextView
-                            android:id="@+id/tvFileStatus"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="No file selected"
-                            android:textSize="15sp"
-                            android:textColor="#B8C5D6"/>
+                    <TextView
+                        android:id="@+id/tvIncomingFileSize"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="2.5 MB"
+                        android:textSize="14sp"
+                        android:textColor="#8A9BAE"
+                        android:layout_marginTop="4dp"
+                        android:textAlignment="center"/>
 
-                        <TextView
-                            android:id="@+id/tvIncomingFileName"
-                            android:layout_width="wrap_content"
+                    <!-- File Details -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="20dp"
+                        android:background="#F5F5F5"
+                        android:padding="12dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:text=""
-                            android:textSize="13sp"
-                            android:textStyle="bold"
-                            android:textColor="#FFFFFF"
-                            android:layout_marginTop="4dp"
-                            android:visibility="gone"/>
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:gravity="center">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="From"
+                                android:textSize="11sp"
+                                android:textColor="#8A9BAE"/>
+
+                            <TextView
+                                android:id="@+id/tvSenderDevice"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Android_456"
+                                android:textSize="13sp"
+                                android:textStyle="bold"
+                                android:textColor="#2C3E5F"
+                                android:layout_marginTop="4dp"
+                                android:maxLines="1"
+                                android:ellipsize="end"/>
+
+                        </LinearLayout>
+
+                        <View
+                            android:layout_width="1dp"
+                            android:layout_height="match_parent"
+                            android:background="#E0E0E0"/>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical"
+                            android:gravity="center">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Type"
+                                android:textSize="11sp"
+                                android:textColor="#8A9BAE"/>
+
+                            <TextView
+                                android:id="@+id/tvIncomingFileType"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="PDF"
+                                android:textSize="13sp"
+                                android:textStyle="bold"
+                                android:textColor="#2C3E5F"
+                                android:layout_marginTop="4dp"/>
+
+                        </LinearLayout>
 
                     </LinearLayout>
 
                 </LinearLayout>
 
-                <!-- Incoming file details (visible when file detected) -->
-                <LinearLayout
-                    android:id="@+id/fileDetailsContainer"
+            </androidx.cardview.widget.CardView>
+
+            <!-- Action Buttons Container -->
+            <LinearLayout
+                android:id="@+id/actionButtonsContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="24dp"
+                android:visibility="gone">
+
+                <!-- Start Receiving Button -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/btnStartReceiving"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:layout_marginTop="16dp"
-                    android:visibility="gone">
-
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:background="#2C3E5F"
-                        android:layout_marginBottom="12dp"/>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="File Size:"
-                            android:textSize="13sp"
-                            android:textColor="#8A9BAE"/>
-
-                        <TextView
-                            android:id="@+id/tvIncomingFileSize"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="2.5 MB"
-                            android:textSize="13sp"
-                            android:textColor="#B8C5D6"/>
-
-                    </LinearLayout>
+                    app:cardCornerRadius="25dp"
+                    app:cardBackgroundColor="#4CAF50"
+                    app:cardElevation="8dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?android:attr/selectableItemBackground">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
-                        android:layout_marginTop="8dp">
+                        android:padding="20dp"
+                        android:gravity="center">
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/ic_download"
+                            app:tint="#FFFFFF"
+                            android:layout_marginEnd="12dp"/>
 
                         <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="From Device:"
-                            android:textSize="13sp"
-                            android:textColor="#8A9BAE"/>
-
-                        <TextView
-                            android:id="@+id/tvSenderDevice"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Android_456"
-                            android:textSize="13sp"
-                            android:textColor="#B8C5D6"/>
+                            android:text="Accept and Receive"
+                            android:textSize="17sp"
+                            android:textStyle="bold"
+                            android:textColor="#FFFFFF"/>
 
                     </LinearLayout>
 
-                </LinearLayout>
+                </androidx.cardview.widget.CardView>
 
-            </LinearLayout>
-
-        </androidx.cardview.widget.CardView>
-
-        <!-- Wait for File Button (default state) -->
-        <androidx.cardview.widget.CardView
-            android:id="@+id/btnWaitForFile"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            app:cardCornerRadius="25dp"
-            app:cardBackgroundColor="#5B9FED"
-            app:cardElevation="8dp"
-            android:clickable="true"
-            android:focusable="true"
-            android:foreground="?android:attr/selectableItemBackground">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:padding="20dp"
-                android:gravity="center">
-
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_waiting"
-                    app:tint="#FFFFFF"
-                    android:layout_marginEnd="12dp"/>
-
-                <TextView
-                    android:layout_width="wrap_content"
+                <!-- Reject Button -->
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/btnReject"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Wait for File"
-                    android:textSize="17sp"
-                    android:textStyle="bold"
-                    android:textColor="#FFFFFF"/>
+                    android:layout_marginTop="12dp"
+                    app:cardCornerRadius="25dp"
+                    app:cardBackgroundColor="#3D5170"
+                    app:cardElevation="4dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?android:attr/selectableItemBackground">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:padding="18dp"
+                        android:gravity="center">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:src="@drawable/ic_close"
+                            app:tint="#FFFFFF"
+                            android:layout_marginEnd="10dp"/>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Reject"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="#FFFFFF"/>
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
 
             </LinearLayout>
 
-        </androidx.cardview.widget.CardView>
+        </LinearLayout>
 
-        <!-- Start Receiving Button (visible when file detected) -->
-        <androidx.cardview.widget.CardView
-            android:id="@+id/btnStartReceiving"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:visibility="gone"
-            app:cardCornerRadius="25dp"
-            app:cardBackgroundColor="#FF9966"
-            app:cardElevation="8dp"
-            android:clickable="true"
-            android:focusable="true"
-            android:foreground="?android:attr/selectableItemBackground">
+    </ScrollView>
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:padding="20dp"
-                android:gravity="center">
-
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_download"
-                    app:tint="#FFFFFF"
-                    android:layout_marginEnd="12dp"/>
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Start Receiving"
-                    android:textSize="17sp"
-                    android:textStyle="bold"
-                    android:textColor="#FFFFFF"/>
-
-            </LinearLayout>
-
-        </androidx.cardview.widget.CardView>
-
-        <!-- Reject Button (visible when file detected) -->
-        <androidx.cardview.widget.CardView
-            android:id="@+id/btnReject"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:visibility="gone"
-            app:cardCornerRadius="25dp"
-            app:cardBackgroundColor="#3D5170"
-            app:cardElevation="4dp"
-            android:clickable="true"
-            android:focusable="true"
-            android:foreground="?android:attr/selectableItemBackground">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:padding="18dp"
-                android:gravity="center">
-
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@drawable/ic_close"
-                    app:tint="#FFFFFF"
-                    android:layout_marginEnd="10dp"/>
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Reject"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    android:textColor="#FFFFFF"/>
-
-            </LinearLayout>
-
-        </androidx.cardview.widget.CardView>
-
-    </LinearLayout>
-
-    <!-- Waiting Animation Indicator -->
-    <LinearLayout
-        android:id="@+id/waitingIndicator"
-        android:layout_width="wrap_content"
+    <!-- Progress Section (Shows at bottom when receiving) -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/progressSection"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:layout_marginBottom="60dp"
+        android:visibility="gone"
+        app:cardCornerRadius="0dp"
+        app:cardBackgroundColor="#3D5170"
+        app:cardElevation="12dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <ProgressBar
-            android:id="@+id/progressWaiting"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:indeterminateTint="#5B9FED"/>
-
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Listening for incoming files..."
-            android:textSize="14sp"
-            android:textColor="#8A9BAE"
-            android:layout_marginTop="12dp"/>
+            android:orientation="vertical"
+            android:padding="20dp">
 
-    </LinearLayout>
+            <!-- Progress Header -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:src="@drawable/ic_download"
+                    app:tint="#4CAF50"/>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:layout_marginStart="12dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Receiving..."
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="#FFFFFF"/>
+
+                    <TextView
+                        android:id="@+id/tvProgressFileName"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="document.pdf"
+                        android:textSize="12sp"
+                        android:textColor="#8A9BAE"
+                        android:layout_marginTop="2dp"
+                        android:maxLines="1"
+                        android:ellipsize="end"/>
+
+                </LinearLayout>
+
+                <ImageView
+                    android:id="@+id/btnCancelReceiving"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:src="@drawable/ic_close"
+                    android:padding="6dp"
+                    app:tint="#8A9BAE"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"/>
+
+            </LinearLayout>
+
+            <!-- Progress Bar -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="6dp"
+                android:layout_marginTop="16dp"
+                android:background="@drawable/progress_bg">
+
+                <View
+                    android:id="@+id/progressBar"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/progress_filled"/>
+
+            </FrameLayout>
+
+            <!-- Progress Details -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="12dp">
+
+                <TextView
+                    android:id="@+id/tvProgressPercent"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="0%"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:textColor="#4CAF50"/>
+
+                <TextView
+                    android:id="@+id/tvProgressDetails"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0 MB / 2.5 MB"
+                    android:textSize="12sp"
+                    android:textColor="#B8C5D6"
+                    android:layout_marginEnd="16dp"/>
+
+                <TextView
+                    android:id="@+id/tvTransferSpeed"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0 MB/s"
+                    android:textSize="12sp"
+                    android:textColor="#8A9BAE"/>
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </androidx.cardview.widget.CardView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
