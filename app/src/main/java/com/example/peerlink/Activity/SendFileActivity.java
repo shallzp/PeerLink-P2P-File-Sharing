@@ -1,13 +1,17 @@
 package com.example.peerlink.Activity;
 
+import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.provider.OpenableColumns;
 import android.view.View;
+import android.view.WindowManager;
 import android.webkit.MimeTypeMap;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -21,13 +25,16 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class SendFileActivity extends AppCompatActivity {
 
     private static final int SERVER_PORT = 8988;
-    private static final int CONNECTION_TIMEOUT = 5000; // 5 seconds
+    private static final int BASE_CONNECTION_TIMEOUT = 10000; // 10 seconds base timeout
+    private static final int SOCKET_BUFFER_SIZE = 262144; // ADD THIS: 256 KB socket buffer
+
 
     // UI Elements
     private CardView btnSelectFile, btnStartTransfer, filePreviewCard, statusBadge;
@@ -47,10 +54,14 @@ public class SendFileActivity extends AppCompatActivity {
     private String connectedDeviceName = "Unknown Device";
     private boolean isReceiverReady = false;
 
+    // Locks for keeping connection stable
+    private WifiManager.WifiLock wifiLock = null;
+    private PowerManager.WakeLock wakeLock = null;
+
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    // File picker launcher - FIXED TYPE
+    // File picker launcher
     private final ActivityResultLauncher<Intent> filePickerLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
                 if (result.getResultCode() == RESULT_OK && result.getData() != null) {
@@ -66,9 +77,13 @@ public class SendFileActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.send_file);
 
+        // Keep screen on during file transfer preparation
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
         initializeViews();
         loadConnectionInfo();
         setupListeners();
+        acquireLocks();
     }
 
     private void initializeViews() {
@@ -137,6 +152,52 @@ public class SendFileActivity extends AppCompatActivity {
         ivClearFile.setOnClickListener(v -> clearSelectedFile());
     }
 
+    /**
+     * Acquire WiFi and Wake locks to ensure stable transfer
+     */
+    private void acquireLocks() {
+        try {
+            // WiFi Lock - Prevent WiFi from sleeping
+            WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wifiManager != null) {
+                wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "PeerLink:SendFileLock");
+                wifiLock.acquire();
+                android.util.Log.d("SendFile", "WiFi lock acquired");
+            }
+
+            // Wake Lock - Keep CPU running (partial wake lock - doesn't keep screen on)
+            PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (powerManager != null) {
+                wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PeerLink:SendFileWakeLock");
+                wakeLock.acquire();
+                android.util.Log.d("SendFile", "Wake lock acquired");
+            }
+        } catch (Exception e) {
+            android.util.Log.e("SendFile", "Error acquiring locks: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Calculate dynamic timeout based on file size
+     * Assumes minimum speed of 512 KB/s with 3x safety buffer
+     */
+    private int calculateDynamicTimeout(long fileSize) {
+        // For metadata exchange, use base timeout
+        if (fileSize == 0) {
+            return BASE_CONNECTION_TIMEOUT;
+        }
+
+        // Calculate estimated time (assuming 512 KB/s minimum speed)
+        long estimatedSeconds = (fileSize / (512 * 1024)) * 3; // 3x buffer
+        int timeoutMs = (int) Math.min(estimatedSeconds * 1000, 600000); // Max 10 minutes
+        int finalTimeout = Math.max(BASE_CONNECTION_TIMEOUT, timeoutMs);
+
+        android.util.Log.d("SendFile", "Calculated timeout: " + (finalTimeout / 1000) + " seconds for " +
+                formatFileSize(fileSize));
+
+        return finalTimeout;
+    }
+
     private void openFilePicker() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.setType("*/*");
@@ -153,7 +214,16 @@ public class SendFileActivity extends AppCompatActivity {
         fileType = getFileType(uri);
 
         android.util.Log.d("SendFile", "File selected: " + fileName +
-                ", Size: " + fileSize + ", Type: " + fileType);
+                ", Size: " + fileSize + " bytes (" + formatFileSize(fileSize) + ")" +
+                ", Type: " + fileType);
+
+        // Show warning for very large files
+        if (fileSize > 5L * 1024 * 1024 * 1024) { // > 5 GB
+            Toast.makeText(this,
+                    "Warning: Large file (" + formatFileSize(fileSize) + "). " +
+                            "Keep devices close and don't interrupt the connection.",
+                    Toast.LENGTH_LONG).show();
+        }
 
         // Update UI
         showFilePreview();
@@ -195,7 +265,9 @@ public class SendFileActivity extends AppCompatActivity {
         btnStartTransfer.setAlpha(1.0f);
     }
 
-    // Step 1: Send file metadata to receiver
+    /**
+     * Step 1: Send file metadata to receiver
+     */
     private void sendFileMetadata() {
         updateReceiverStatus("Connecting to receiver...");
         btnStartTransfer.setEnabled(false);
@@ -208,6 +280,9 @@ public class SendFileActivity extends AppCompatActivity {
             int retryCount = 0;
 
             try {
+                // Calculate dynamic timeout for metadata connection
+                int metadataTimeout = calculateDynamicTimeout(0); // Use base timeout for metadata
+
                 // Connection retry loop
                 while (retryCount < maxRetries) {
                     try {
@@ -225,24 +300,56 @@ public class SendFileActivity extends AppCompatActivity {
                                 " to " + connectedDeviceIp + ":" + SERVER_PORT);
 
                         socket = new Socket();
-                        socket.connect(new InetSocketAddress(connectedDeviceIp, SERVER_PORT), CONNECTION_TIMEOUT);
 
-                        android.util.Log.d("SendFile", "Connected successfully");
+                        // OPTIMIZATION: Configure socket for reliable transfer
+                        socket.setTcpNoDelay(true);        // Disable Nagle's algorithm for low latency
+                        socket.setKeepAlive(true);          // Enable TCP keep-alive
+                        socket.setSoTimeout(metadataTimeout); // Set read timeout
+                        socket.setReceiveBufferSize(SOCKET_BUFFER_SIZE); // 256KB receive buffer
+                        socket.setSendBufferSize(SOCKET_BUFFER_SIZE);    // 256KB send buffer
+
+                        socket.connect(new InetSocketAddress(connectedDeviceIp, SERVER_PORT), metadataTimeout);
+
+                        android.util.Log.d("SendFile", "Connected successfully with optimized socket settings");
 
                         // Connection successful, break the retry loop
                         break;
+
+                    } catch (SocketException e) {
+                        retryCount++;
+                        android.util.Log.e("SendFile", "Socket exception on attempt " + retryCount + ": " + e.getMessage());
+
+                        if (retryCount >= maxRetries) {
+                            final String errorMsg = e.getMessage();
+                            mainHandler.post(() -> {
+                                updateReceiverStatus("Connection failed");
+                                Toast.makeText(this,
+                                        "Cannot connect to receiver. Make sure receiver is ready.\nError: " + errorMsg,
+                                        Toast.LENGTH_LONG).show();
+                                btnStartTransfer.setEnabled(true);
+                                statusIndicator.setBackgroundTintList(
+                                        getResources().getColorStateList(android.R.color.holo_red_dark));
+                            });
+                            return;
+                        }
+
+                        // Wait before retry
+                        try {
+                            Thread.sleep(2000);
+                        } catch (InterruptedException ie) {
+                            ie.printStackTrace();
+                        }
 
                     } catch (Exception e) {
                         retryCount++;
                         android.util.Log.e("SendFile", "Connection attempt " + retryCount + " failed: " + e.getMessage());
 
                         if (retryCount >= maxRetries) {
-                            // All retries failed
                             final String errorMsg = e.getMessage();
                             mainHandler.post(() -> {
                                 updateReceiverStatus("Connection failed");
                                 Toast.makeText(this,
-                                        "Cannot connect to receiver. Make sure receiver is ready.\nError: " + errorMsg,
+                                        "Cannot connect to receiver.\nError: " + errorMsg,
                                         Toast.LENGTH_LONG).show();
                                 btnStartTransfer.setEnabled(true);
                                 statusIndicator.setBackgroundTintList(
@@ -284,7 +391,8 @@ public class SendFileActivity extends AppCompatActivity {
                 dos.writeUTF(android.os.Build.MODEL); // Sender device name
                 dos.flush();
 
-                android.util.Log.d("SendFile", "Sent metadata: " + fileName + ", " + fileSize + " bytes");
+                android.util.Log.d("SendFile", "Sent metadata: " + fileName + ", " +
+                        fileSize + " bytes (" + formatFileSize(fileSize) + ")");
 
                 mainHandler.post(() -> {
                     updateReceiverStatus("Waiting for response...");
@@ -348,7 +456,9 @@ public class SendFileActivity extends AppCompatActivity {
         });
     }
 
-    // Step 2: Start actual file transfer and navigate to progress screen
+    /**
+     * Step 2: Start actual file transfer and navigate to progress screen
+     */
     private void startFileTransfer() {
         android.util.Log.d("SendFile", "Starting TransferProgressActivity");
 
@@ -363,15 +473,15 @@ public class SendFileActivity extends AppCompatActivity {
         intent.putExtra("IS_SENDER", true);
         startActivity(intent);
 
-        // Optionally finish this activity
-        // finish();
+        // Don't finish this activity so user can come back
     }
 
     private void updateReceiverStatus(String status) {
         tvReceiverStatus.setText(status);
     }
 
-    // Utility methods
+    // ==================== Utility Methods ====================
+
     private String getFileName(Uri uri) {
         String displayName = "unknown";
         Cursor cursor = getContentResolver().query(uri, null, null, null, null);
@@ -446,6 +556,26 @@ public class SendFileActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+
+        // Release locks
+        try {
+            if (wifiLock != null && wifiLock.isHeld()) {
+                wifiLock.release();
+                android.util.Log.d("SendFile", "WiFi lock released");
+            }
+        } catch (Exception e) {
+            android.util.Log.e("SendFile", "Error releasing WiFi lock: " + e.getMessage());
+        }
+
+        try {
+            if (wakeLock != null && wakeLock.isHeld()) {
+                wakeLock.release();
+                android.util.Log.d("SendFile", "Wake lock released");
+            }
+        } catch (Exception e) {
+            android.util.Log.e("SendFile", "Error releasing wake lock: " + e.getMessage());
+        }
+
         executor.shutdown();
     }
 }

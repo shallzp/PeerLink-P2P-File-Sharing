@@ -1,11 +1,14 @@
 package com.example.peerlink.Activity;
 
-import android.content.Intent;
+import android.content.Context;
 import android.net.Uri;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -19,6 +22,7 @@ import java.io.DataOutputStream;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -26,8 +30,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class TransferProgressActivity extends AppCompatActivity {
 
     private static final int SERVER_PORT = 8988;
-    private static final int BUFFER_SIZE = 8192;
-    private static final int CONNECTION_TIMEOUT = 10000; // 10 seconds
+    private static final int BUFFER_SIZE = 16384; // REDUCED: 16 KB buffer for stability
+    private static final int SOCKET_BUFFER_SIZE = 262144; // 256 KB socket buffer
+    private static final int BASE_CONNECTION_TIMEOUT = 10000; // 10 seconds base timeout
 
     // UI Elements - File Info Card
     private CardView fileInfoCard;
@@ -65,6 +70,10 @@ public class TransferProgressActivity extends AppCompatActivity {
     private String deviceName;
     private boolean isSender;
 
+    // Locks for keeping connection stable
+    private WifiManager.WifiLock wifiLock = null;
+    private PowerManager.WakeLock wakeLock = null;
+
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final AtomicBoolean isTransferring = new AtomicBoolean(false);
@@ -77,9 +86,13 @@ public class TransferProgressActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.transfer_progress);
 
+        // Keep screen on during file transfer
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
         initializeViews();
         loadTransferData();
         setupListeners();
+        acquireLocks();
 
         // Start transfer based on mode
         if (isSender) {
@@ -131,6 +144,51 @@ public class TransferProgressActivity extends AppCompatActivity {
         showConnectingState();
     }
 
+    /**
+     * Acquire WiFi and Wake locks to ensure stable transfer
+     */
+    private void acquireLocks() {
+        try {
+            // WiFi Lock - Prevent WiFi from sleeping
+            WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wifiManager != null) {
+                wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "PeerLink:TransferLock");
+                wifiLock.acquire();
+                android.util.Log.d("TransferProgress", "WiFi lock acquired");
+            }
+
+            // Wake Lock - Keep CPU running
+            PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (powerManager != null) {
+                wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PeerLink:TransferWakeLock");
+                wakeLock.acquire();
+                android.util.Log.d("TransferProgress", "Wake lock acquired");
+            }
+        } catch (Exception e) {
+            android.util.Log.e("TransferProgress", "Error acquiring locks: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Calculate dynamic timeout based on file size
+     * Assumes minimum speed of 512 KB/s with 3x safety buffer
+     */
+    private int calculateDynamicTimeout(long fileSize) {
+        if (fileSize == 0) {
+            return BASE_CONNECTION_TIMEOUT;
+        }
+
+        // Calculate estimated time (assuming 512 KB/s minimum speed)
+        long estimatedSeconds = (fileSize / (512 * 1024)) * 3; // 3x buffer
+        int timeoutMs = (int) Math.min(estimatedSeconds * 1000, 600000); // Max 10 minutes
+        int finalTimeout = Math.max(BASE_CONNECTION_TIMEOUT, timeoutMs);
+
+        android.util.Log.d("TransferProgress", "Calculated timeout: " + (finalTimeout / 1000) +
+                " seconds for " + formatFileSize(fileSize));
+
+        return finalTimeout;
+    }
+
     private void loadTransferData() {
         // Get data from intent
         String fileUriString = getIntent().getStringExtra("FILE_URI");
@@ -146,7 +204,7 @@ public class TransferProgressActivity extends AppCompatActivity {
         }
 
         android.util.Log.d("TransferProgress", "Mode: " + (isSender ? "SENDER" : "RECEIVER") +
-                ", File: " + fileName + ", Size: " + fileSize +
+                ", File: " + fileName + ", Size: " + fileSize + " bytes (" + formatFileSize(fileSize) + ")" +
                 ", Device IP: " + deviceIp + ", Device Name: " + deviceName);
 
         // Update UI with file info
@@ -227,25 +285,44 @@ public class TransferProgressActivity extends AppCompatActivity {
             long totalSent = 0;
 
             try {
+                // Calculate dynamic timeout based on file size
+                int dynamicTimeout = calculateDynamicTimeout(fileSize);
+
                 // Step 1: Connect to receiver
                 mainHandler.post(() -> tvStatusMessage.setText("Connecting to receiver..."));
                 android.util.Log.d("TransferProgress", "Connecting to " + deviceIp + ":" + SERVER_PORT);
 
                 socket = new Socket();
-                socket.connect(new InetSocketAddress(deviceIp, SERVER_PORT), CONNECTION_TIMEOUT);
+
+                // CRITICAL FIX: Increase socket buffers and disable Nagle for small packets
+                socket.setReceiveBufferSize(SOCKET_BUFFER_SIZE); // 256 KB receive buffer
+                socket.setSendBufferSize(SOCKET_BUFFER_SIZE);    // 256 KB send buffer
+                socket.setTcpNoDelay(false);                     // Enable Nagle's algorithm for better batching
+                socket.setKeepAlive(true);                        // Enable TCP keep-alive
+                socket.setSoTimeout(dynamicTimeout);              // Dynamic timeout based on file size
+                socket.setSoLinger(true, 0);                     // Immediate close without TIME_WAIT
+
+                socket.connect(new InetSocketAddress(deviceIp, SERVER_PORT), BASE_CONNECTION_TIMEOUT);
                 dos = new DataOutputStream(socket.getOutputStream());
 
-                android.util.Log.d("TransferProgress", "Connected successfully");
+                android.util.Log.d("TransferProgress", "Connected successfully. " +
+                        "Buffer: " + BUFFER_SIZE + " bytes, " +
+                        "Socket buffer: " + SOCKET_BUFFER_SIZE + " bytes, " +
+                        "Timeout: " + (dynamicTimeout / 1000) + " seconds");
 
                 // Step 2: Send FILE_DATA marker
                 mainHandler.post(() -> tvStatusMessage.setText("Initiating transfer..."));
-                dos.writeUTF("FILE_DATA");
-                dos.flush();
+                try {
+                    dos.writeUTF("FILE_DATA");
+                    dos.flush();
+                } catch (SocketException e) {
+                    throw new Exception("Failed to send FILE_DATA marker: Connection lost");
+                }
 
                 android.util.Log.d("TransferProgress", "Sent FILE_DATA marker");
 
-                // Small delay to ensure receiver is ready
-                Thread.sleep(500);
+                // Longer delay to ensure receiver is ready
+                Thread.sleep(1000); // Increased to 1 second
 
                 // Step 3: Switch to transferring state
                 mainHandler.post(this::showTransferringState);
@@ -261,13 +338,44 @@ public class TransferProgressActivity extends AppCompatActivity {
                 long startTime = System.currentTimeMillis();
                 long lastUpdateTime = startTime;
                 long lastSentBytes = 0;
+                int packetCount = 0;
 
-                android.util.Log.d("TransferProgress", "Starting file transfer, size: " + fileSize);
+                android.util.Log.d("TransferProgress", "Starting file transfer with " + BUFFER_SIZE +
+                        " byte buffer, size: " + fileSize + " bytes (" + formatFileSize(fileSize) + ")");
 
                 // Send file data
                 while (isTransferring.get() && (bytesRead = inputStream.read(buffer)) != -1) {
-                    dos.write(buffer, 0, bytesRead);
-                    totalSent += bytesRead;
+
+                    // Check if socket is still connected
+                    if (socket == null || socket.isClosed() || !socket.isConnected()) {
+                        throw new SocketException("Socket disconnected during transfer at " +
+                                formatFileSize(totalSent));
+                    }
+
+                    try {
+                        dos.write(buffer, 0, bytesRead);
+                        totalSent += bytesRead;
+                        packetCount++;
+
+                        // CRITICAL FIX: Flush every 10 packets (160 KB) and add small delay
+                        if (packetCount % 10 == 0) {
+                            dos.flush();
+                            Thread.sleep(5); // 5ms pause to let receiver catch up
+
+                            android.util.Log.d("TransferProgress",
+                                    "Checkpoint at " + formatFileSize(totalSent) +
+                                            " (" + packetCount + " packets)");
+                        }
+
+                    } catch (SocketException e) {
+                        android.util.Log.e("TransferProgress", "Socket error at " + totalSent +
+                                " bytes (" + packetCount + " packets): " + e.getMessage());
+                        throw new Exception("Connection interrupted at " + formatFileSize(totalSent) +
+                                ": " + (e.getMessage() != null ? e.getMessage() : "Broken pipe"));
+                    } catch (InterruptedException e) {
+                        android.util.Log.e("TransferProgress", "Transfer interrupted by thread");
+                        throw new Exception("Transfer interrupted");
+                    }
 
                     long currentTime = System.currentTimeMillis();
 
@@ -285,12 +393,25 @@ public class TransferProgressActivity extends AppCompatActivity {
                     }
                 }
 
+                // Final flush
                 dos.flush();
+
+                // ADDED: Send completion marker
+                try {
+                    dos.writeUTF("TRANSFER_COMPLETE");
+                    dos.flush();
+                    android.util.Log.d("TransferProgress", "Sent completion marker");
+                } catch (Exception e) {
+                    android.util.Log.e("TransferProgress", "Could not send completion marker: " + e.getMessage());
+                }
 
                 final long totalTime = System.currentTimeMillis() - startTime;
                 final long finalSent = totalSent;
+                final double avgSpeedMBps = (totalSent / (1024.0 * 1024)) / (totalTime / 1000.0);
 
-                android.util.Log.d("TransferProgress", "Transfer complete. Sent " + totalSent + " bytes in " + totalTime + "ms");
+                android.util.Log.d("TransferProgress", "Transfer complete. Sent " + totalSent +
+                        " bytes (" + packetCount + " packets) in " + totalTime + "ms. " +
+                        "Average speed: " + String.format("%.2f MB/s", avgSpeedMBps));
 
                 // Check if transfer was complete
                 if (totalSent >= fileSize && isTransferring.get()) {
@@ -299,7 +420,8 @@ public class TransferProgressActivity extends AppCompatActivity {
                         updateProgress(fileSize, totalTime, 0, 0);
                         showCompletionState(true,
                                 "Transfer Complete!",
-                                fileName + " sent successfully to " + deviceName);
+                                fileName + " sent successfully to " + deviceName +
+                                        "\nAverage speed: " + String.format("%.2f MB/s", avgSpeedMBps));
                     });
                 } else if (!isTransferring.get()) {
                     // Cancelled
@@ -317,6 +439,17 @@ public class TransferProgressActivity extends AppCompatActivity {
                     );
                 }
 
+            } catch (SocketException e) {
+                e.printStackTrace();
+                android.util.Log.e("TransferProgress", "Socket error: " + e.getMessage());
+                final String errorMsg = e.getMessage();
+                final long finalSent = totalSent;
+                mainHandler.post(() ->
+                        showCompletionState(false,
+                                "Connection Lost",
+                                "Error: " + (errorMsg != null ? errorMsg : "Broken pipe") +
+                                        "\nSent: " + formatFileSize(finalSent))
+                );
             } catch (Exception e) {
                 e.printStackTrace();
                 android.util.Log.e("TransferProgress", "Transfer error: " + e.getMessage());
@@ -325,7 +458,8 @@ public class TransferProgressActivity extends AppCompatActivity {
                 mainHandler.post(() ->
                         showCompletionState(false,
                                 "Transfer Failed",
-                                "Error: " + errorMsg + "\nSent: " + formatFileSize(finalSent))
+                                "Error: " + (errorMsg != null ? errorMsg : "Unknown error") +
+                                        "\nSent: " + formatFileSize(finalSent))
                 );
             } finally {
                 isTransferring.set(false);
@@ -337,7 +471,10 @@ public class TransferProgressActivity extends AppCompatActivity {
                     e.printStackTrace();
                 }
                 try {
-                    if (dos != null) dos.close();
+                    if (dos != null) {
+                        dos.flush();
+                        dos.close();
+                    }
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -463,6 +600,25 @@ public class TransferProgressActivity extends AppCompatActivity {
             if (socket != null && !socket.isClosed()) socket.close();
         } catch (Exception e) {
             e.printStackTrace();
+        }
+
+        // Release locks
+        try {
+            if (wifiLock != null && wifiLock.isHeld()) {
+                wifiLock.release();
+                android.util.Log.d("TransferProgress", "WiFi lock released");
+            }
+        } catch (Exception e) {
+            android.util.Log.e("TransferProgress", "Error releasing WiFi lock: " + e.getMessage());
+        }
+
+        try {
+            if (wakeLock != null && wakeLock.isHeld()) {
+                wakeLock.release();
+                android.util.Log.d("TransferProgress", "Wake lock released");
+            }
+        } catch (Exception e) {
+            android.util.Log.e("TransferProgress", "Error releasing wake lock: " + e.getMessage());
         }
 
         executor.shutdownNow();

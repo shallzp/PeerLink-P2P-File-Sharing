@@ -1,11 +1,14 @@
 package com.example.peerlink.Activity;
 
+import android.content.Context;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.view.View;
-import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -21,6 +24,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -28,7 +33,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class ReceiveFileActivity extends AppCompatActivity {
 
     private static final int SERVER_PORT = 8988;
-    private static final int BUFFER_SIZE = 8192;
+    private static final int BUFFER_SIZE = 16384; // MATCHED: 16 KB buffer to match sender
+    private static final int SOCKET_BUFFER_SIZE = 262144; // 256 KB socket buffer
+    private static final int BASE_TIMEOUT = 60000; // 1 minute base timeout
 
     // UI Elements - Waiting State
     private LinearLayout waitingIndicator;
@@ -47,7 +54,7 @@ public class ReceiveFileActivity extends AppCompatActivity {
     private CardView progressSection;
     private TextView tvProgressFileName, tvProgressPercent, tvProgressDetails, tvTransferSpeed;
     private View progressBar;
-    private View progressBarParent; // ADDED: Reference to parent view
+    private View progressBarParent;
     private ImageView btnCancelReceiving;
 
     // UI Elements - Connection Status
@@ -66,6 +73,10 @@ public class ReceiveFileActivity extends AppCompatActivity {
     private DataInputStream dataInputStream;
     private DataOutputStream dataOutputStream;
 
+    // Locks for keeping connection stable
+    private WifiManager.WifiLock wifiLock = null;
+    private PowerManager.WakeLock wakeLock = null;
+
     private final ExecutorService executor = Executors.newCachedThreadPool();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final AtomicBoolean isListening = new AtomicBoolean(false);
@@ -76,8 +87,12 @@ public class ReceiveFileActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.receive_file);
 
+        // Keep screen on during file transfer
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
         initializeViews();
         setupListeners();
+        acquireLocks();
 
         // Get connection info from intent
         String connectedDeviceIp = getIntent().getStringExtra("DEVICE_IP");
@@ -115,7 +130,7 @@ public class ReceiveFileActivity extends AppCompatActivity {
         tvProgressDetails = findViewById(R.id.tvProgressDetails);
         tvTransferSpeed = findViewById(R.id.tvTransferSpeed);
         progressBar = findViewById(R.id.progressBar);
-        progressBarParent = findViewById(R.id.progressBarContainer); // ADDED: Get parent container
+        progressBarParent = findViewById(R.id.progressBarContainer);
         btnCancelReceiving = findViewById(R.id.btnCancelReceiving);
 
         // Status
@@ -130,6 +145,51 @@ public class ReceiveFileActivity extends AppCompatActivity {
         btnStartReceiving.setOnClickListener(v -> acceptAndStartReceiving());
         btnReject.setOnClickListener(v -> rejectIncomingFile());
         btnCancelReceiving.setOnClickListener(v -> cancelReceiving());
+    }
+
+    /**
+     * Acquire WiFi and Wake locks to ensure stable transfer
+     */
+    private void acquireLocks() {
+        try {
+            // WiFi Lock - Prevent WiFi from sleeping
+            WifiManager wifiManager = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wifiManager != null) {
+                wifiLock = wifiManager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "PeerLink:ReceiveFileLock");
+                wifiLock.acquire();
+                android.util.Log.d("ReceiveFile", "WiFi lock acquired");
+            }
+
+            // Wake Lock - Keep CPU running
+            PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (powerManager != null) {
+                wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PeerLink:ReceiveFileWakeLock");
+                wakeLock.acquire();
+                android.util.Log.d("ReceiveFile", "Wake lock acquired");
+            }
+        } catch (Exception e) {
+            android.util.Log.e("ReceiveFile", "Error acquiring locks: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Calculate dynamic timeout based on file size
+     * Assumes minimum speed of 512 KB/s with 3x safety buffer
+     */
+    private int calculateDynamicTimeout(long fileSize) {
+        if (fileSize == 0) {
+            return BASE_TIMEOUT;
+        }
+
+        // Calculate estimated time (assuming 512 KB/s minimum speed)
+        long estimatedSeconds = (fileSize / (512 * 1024)) * 3; // 3x buffer
+        int timeoutMs = (int) Math.min(estimatedSeconds * 1000, 600000); // Max 10 minutes
+        int finalTimeout = Math.max(BASE_TIMEOUT, timeoutMs);
+
+        android.util.Log.d("ReceiveFile", "Calculated timeout: " + (finalTimeout / 1000) +
+                " seconds for " + formatFileSize(fileSize));
+
+        return finalTimeout;
     }
 
     private void showWaitingState() {
@@ -164,15 +224,30 @@ public class ReceiveFileActivity extends AppCompatActivity {
         executor.execute(() -> {
             try {
                 serverSocket = new ServerSocket(SERVER_PORT);
+
+                // OPTIMIZATION: Set larger receive buffer for server socket
+                serverSocket.setReceiveBufferSize(SOCKET_BUFFER_SIZE);
+
                 mainHandler.post(() -> {
                     Toast.makeText(this, "Listening on port " + SERVER_PORT, Toast.LENGTH_SHORT).show();
                     updateConnectionStatus("Ready", android.R.color.holo_green_dark);
-                    android.util.Log.d("ReceiveFile", "ServerSocket listening on port " + SERVER_PORT);
+                    android.util.Log.d("ReceiveFile", "ServerSocket listening on port " + SERVER_PORT +
+                            ". Buffer: " + BUFFER_SIZE + " bytes, Socket buffer: " + SOCKET_BUFFER_SIZE + " bytes");
                 });
 
                 while (isListening.get()) {
                     // Wait for incoming connection
                     clientSocket = serverSocket.accept();
+
+                    // MATCHED: Same socket configuration as sender
+                    clientSocket.setReceiveBufferSize(SOCKET_BUFFER_SIZE); // 256 KB
+                    clientSocket.setSendBufferSize(SOCKET_BUFFER_SIZE);    // 256 KB
+                    clientSocket.setTcpNoDelay(false);                     // Enable Nagle's algorithm
+                    clientSocket.setKeepAlive(true);                        // Enable TCP keep-alive
+                    clientSocket.setSoLinger(true, 0);                     // Immediate close
+
+                    android.util.Log.d("ReceiveFile", "Client connected with matched socket settings");
+
                     mainHandler.post(() ->
                             updateConnectionStatus("Connected", android.R.color.holo_green_dark));
 
@@ -180,9 +255,20 @@ public class ReceiveFileActivity extends AppCompatActivity {
                     handleIncomingConnection(clientSocket);
                 }
 
+            } catch (SocketException e) {
+                if (isListening.get()) {
+                    e.printStackTrace();
+                    android.util.Log.e("ReceiveFile", "Socket error while listening: " + e.getMessage());
+                    mainHandler.post(() -> {
+                        Toast.makeText(this, "Socket error: " + e.getMessage(),
+                                Toast.LENGTH_LONG).show();
+                        updateConnectionStatus("Error", android.R.color.holo_red_dark);
+                    });
+                }
             } catch (Exception e) {
                 if (isListening.get()) {
                     e.printStackTrace();
+                    android.util.Log.e("ReceiveFile", "Error listening: " + e.getMessage());
                     mainHandler.post(() -> {
                         Toast.makeText(this, "Error listening: " + e.getMessage(),
                                 Toast.LENGTH_LONG).show();
@@ -211,7 +297,16 @@ public class ReceiveFileActivity extends AppCompatActivity {
                     senderDeviceName = dataInputStream.readUTF();
 
                     android.util.Log.d("ReceiveFile", "Metadata received: " + incomingFileName +
-                            ", Size: " + incomingFileSize);
+                            ", Size: " + incomingFileSize + " bytes (" + formatFileSize(incomingFileSize) + ")" +
+                            ", Type: " + incomingFileType);
+
+                    // Show warning for very large files
+                    if (incomingFileSize > 5L * 1024 * 1024 * 1024) { // > 5 GB
+                        final String warningMsg = "Large file (" + formatFileSize(incomingFileSize) +
+                                "). Keep devices close during transfer.";
+                        mainHandler.post(() ->
+                                Toast.makeText(this, warningMsg, Toast.LENGTH_LONG).show());
+                    }
 
                     // Update UI to show incoming file
                     mainHandler.post(() -> displayIncomingFile());
@@ -221,6 +316,7 @@ public class ReceiveFileActivity extends AppCompatActivity {
 
             } catch (Exception e) {
                 e.printStackTrace();
+                android.util.Log.e("ReceiveFile", "Error receiving metadata: " + e.getMessage());
                 mainHandler.post(() -> {
                     Toast.makeText(this, "Error receiving metadata: " + e.getMessage(),
                             Toast.LENGTH_LONG).show();
@@ -270,13 +366,25 @@ public class ReceiveFileActivity extends AppCompatActivity {
                 });
 
                 // IMPORTANT: Close the metadata socket
-                // Sender will create a NEW connection for file transfer
                 closeSocket();
                 android.util.Log.d("ReceiveFile", "Closed metadata socket, waiting for new connection...");
 
                 // Wait for NEW connection from TransferProgressActivity
                 clientSocket = serverSocket.accept();
-                android.util.Log.d("ReceiveFile", "New connection accepted for file transfer");
+
+                // MATCHED: Configure new socket with same settings as sender
+                int dynamicTimeout = calculateDynamicTimeout(incomingFileSize);
+                clientSocket.setReceiveBufferSize(SOCKET_BUFFER_SIZE); // 256 KB
+                clientSocket.setSendBufferSize(SOCKET_BUFFER_SIZE);    // 256 KB
+                clientSocket.setTcpNoDelay(false);                     // Enable Nagle's algorithm (MATCHED)
+                clientSocket.setKeepAlive(true);                        // Enable TCP keep-alive
+                clientSocket.setSoTimeout(dynamicTimeout);              // Dynamic timeout
+                clientSocket.setSoLinger(true, 0);                     // Immediate close (MATCHED)
+
+                android.util.Log.d("ReceiveFile", "New connection accepted. " +
+                        "Buffer: " + BUFFER_SIZE + " bytes, " +
+                        "Socket buffer: " + SOCKET_BUFFER_SIZE + " bytes, " +
+                        "Timeout: " + (dynamicTimeout / 1000) + " seconds");
 
                 // Create new streams for the new connection
                 dataInputStream = new DataInputStream(clientSocket.getInputStream());
@@ -290,16 +398,22 @@ public class ReceiveFileActivity extends AppCompatActivity {
                     // Start receiving the actual file
                     receiveFile();
                 } else {
-                    mainHandler.post(() -> {
-                        Toast.makeText(this, "Invalid data received from sender",
-                                Toast.LENGTH_SHORT).show();
-                        resetToWaitingState();
-                    });
+                    throw new Exception("Invalid data marker received: " + dataMarker + ". Expected: FILE_DATA");
                 }
 
+            } catch (NullPointerException e) {
+                e.printStackTrace();
+                final String errorMsg = "Internal error: " + (e.getMessage() != null ? e.getMessage() :
+                        "Null pointer - connection lost");
+                android.util.Log.e("ReceiveFile", "NullPointerException in accept: " + errorMsg);
+                mainHandler.post(() -> {
+                    Toast.makeText(this, errorMsg, Toast.LENGTH_LONG).show();
+                    resetToWaitingState();
+                });
             } catch (Exception e) {
                 e.printStackTrace();
-                final String errorMsg = e.getMessage();
+                final String errorMsg = e.getMessage() != null ? e.getMessage() : "Unknown error occurred";
+                android.util.Log.e("ReceiveFile", "Error accepting file: " + errorMsg);
                 mainHandler.post(() -> {
                     Toast.makeText(this, "Error accepting file: " + errorMsg,
                             Toast.LENGTH_LONG).show();
@@ -311,10 +425,23 @@ public class ReceiveFileActivity extends AppCompatActivity {
 
     private void receiveFile() {
         isReceiving.set(true);
+        FileOutputStream fos = null;
 
         try {
+            // Validate socket and streams
+            if (clientSocket == null || clientSocket.isClosed()) {
+                throw new Exception("Client socket is not connected");
+            }
+
+            if (dataInputStream == null) {
+                throw new Exception("Data input stream is null");
+            }
+
             // Create custom folder in Documents directory
             File documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS);
+            if (documentsDir == null) {
+                throw new Exception("Cannot access Documents directory");
+            }
 
             // Create your app's custom folder
             File peerLinkFolder = new File(documentsDir, "PeerLink");
@@ -322,6 +449,10 @@ public class ReceiveFileActivity extends AppCompatActivity {
                 boolean created = peerLinkFolder.mkdirs();
                 android.util.Log.d("ReceiveFile", "PeerLink folder created: " + created +
                         " at " + peerLinkFolder.getAbsolutePath());
+
+                if (!created) {
+                    throw new Exception("Failed to create PeerLink folder");
+                }
             }
 
             File outputFile = new File(peerLinkFolder, incomingFileName);
@@ -348,24 +479,54 @@ public class ReceiveFileActivity extends AppCompatActivity {
                 throw new Exception("No write permission to Documents/PeerLink folder");
             }
 
-            FileOutputStream fos = new FileOutputStream(finalOutputFile);
+            fos = new FileOutputStream(finalOutputFile);
             byte[] buffer = new byte[BUFFER_SIZE];
             long totalReceived = 0;
             int bytesRead;
             long startTime = System.currentTimeMillis();
             long lastUpdateTime = startTime;
+            int packetCount = 0;
+
+            android.util.Log.d("ReceiveFile", "Starting file reception with " + BUFFER_SIZE + " byte buffer");
 
             while (isReceiving.get() && totalReceived < incomingFileSize) {
                 int remaining = (int) Math.min(BUFFER_SIZE, incomingFileSize - totalReceived);
-                bytesRead = dataInputStream.read(buffer, 0, remaining);
 
-                if (bytesRead == -1) {
-                    android.util.Log.d("ReceiveFile", "End of stream at " + totalReceived + " bytes");
-                    break;
+                try {
+                    bytesRead = dataInputStream.read(buffer, 0, remaining);
+
+                    if (bytesRead == -1) {
+                        android.util.Log.d("ReceiveFile", "End of stream at " + totalReceived + " bytes");
+                        break;
+                    }
+
+                    fos.write(buffer, 0, bytesRead);
+                    totalReceived += bytesRead;
+                    packetCount++;
+
+                    // MATCHED: Flush every 10 packets like sender
+                    if (packetCount % 10 == 0) {
+                        fos.flush();
+                        android.util.Log.d("ReceiveFile",
+                                "Checkpoint at " + formatFileSize(totalReceived) +
+                                        " (" + packetCount + " packets)");
+                    }
+
+                } catch (SocketTimeoutException e) {
+                    android.util.Log.e("ReceiveFile", "Socket timeout at " + totalReceived +
+                            " bytes (" + packetCount + " packets)");
+                    throw new Exception("Connection timeout during transfer at " + formatFileSize(totalReceived));
+                } catch (SocketException e) {
+                    android.util.Log.e("ReceiveFile", "Socket error at " + totalReceived +
+                            " bytes (" + packetCount + " packets): " +
+                            (e.getMessage() != null ? e.getMessage() : "Connection lost"));
+                    throw new Exception("Connection interrupted at " + formatFileSize(totalReceived) +
+                            ": " + (e.getMessage() != null ? e.getMessage() : "Connection lost"));
+                } catch (NullPointerException e) {
+                    android.util.Log.e("ReceiveFile", "Null pointer at " + totalReceived + " bytes");
+                    e.printStackTrace();
+                    throw new Exception("Internal error during transfer: Input stream became null");
                 }
-
-                fos.write(buffer, 0, bytesRead);
-                totalReceived += bytesRead;
 
                 long currentTime = System.currentTimeMillis();
 
@@ -378,20 +539,27 @@ public class ReceiveFileActivity extends AppCompatActivity {
                 }
             }
 
-            fos.flush();
-            fos.close();
+            if (fos != null) {
+                fos.flush();
+                fos.close();
+                fos = null;
+            }
 
             android.util.Log.d("ReceiveFile", "File received: " + totalReceived + " / " +
-                    incomingFileSize + " bytes");
+                    incomingFileSize + " bytes (" + packetCount + " packets)");
             android.util.Log.d("ReceiveFile", "File exists: " + finalOutputFile.exists() +
                     ", Size: " + finalOutputFile.length());
 
-            // Make file visible in file managers and gallery
+            // Make file visible in file managers
             scanMediaFile(finalOutputFile);
 
             // Transfer complete
             if (totalReceived >= incomingFileSize) {
                 final long totalTime = System.currentTimeMillis() - startTime;
+                final double avgSpeedMBps = (totalReceived / (1024.0 * 1024)) / (totalTime / 1000.0);
+                android.util.Log.d("ReceiveFile", "Transfer completed successfully. Average speed: " +
+                        String.format("%.2f MB/s", avgSpeedMBps));
+
                 mainHandler.post(() -> {
                     Toast.makeText(this, "File saved successfully!\nDocuments/PeerLink/" +
                             finalOutputFile.getName(), Toast.LENGTH_LONG).show();
@@ -405,15 +573,24 @@ public class ReceiveFileActivity extends AppCompatActivity {
                 final long finalReceived = totalReceived;
                 mainHandler.post(() -> {
                     Toast.makeText(this, "Transfer incomplete. Received " +
-                                    finalReceived + " of " + incomingFileSize + " bytes",
+                                    formatFileSize(finalReceived) + " of " + formatFileSize(incomingFileSize),
                             Toast.LENGTH_LONG).show();
                     resetToWaitingState();
                 });
             }
 
+        } catch (NullPointerException e) {
+            e.printStackTrace();
+            final String errorMsg = "Internal error: " + (e.getMessage() != null ? e.getMessage() : "Null pointer exception");
+            android.util.Log.e("ReceiveFile", "NullPointerException in receiveFile: " + errorMsg);
+            mainHandler.post(() -> {
+                Toast.makeText(this, errorMsg, Toast.LENGTH_LONG).show();
+                resetToWaitingState();
+            });
         } catch (Exception e) {
             e.printStackTrace();
-            final String errorMsg = e.getMessage();
+            final String errorMsg = e.getMessage() != null ? e.getMessage() : "Unknown error occurred";
+            android.util.Log.e("ReceiveFile", "Error receiving file: " + errorMsg);
             mainHandler.post(() -> {
                 Toast.makeText(this, "Error receiving file: " + errorMsg,
                         Toast.LENGTH_LONG).show();
@@ -421,11 +598,23 @@ public class ReceiveFileActivity extends AppCompatActivity {
             });
         } finally {
             isReceiving.set(false);
+
+            // Close file output stream if still open
+            if (fos != null) {
+                try {
+                    fos.close();
+                } catch (Exception e) {
+                    android.util.Log.e("ReceiveFile", "Error closing file output stream: " + e.getMessage());
+                }
+            }
+
             closeSocket();
         }
     }
 
-    // Add this method to make files visible in file managers
+    /**
+     * Make files visible in file managers and gallery
+     */
     private void scanMediaFile(File file) {
         android.media.MediaScannerConnection.scanFile(
                 this,
@@ -443,7 +632,7 @@ public class ReceiveFileActivity extends AppCompatActivity {
         int percentage = incomingFileSize > 0 ? (int) ((received * 100) / incomingFileSize) : 0;
         percentage = Math.min(percentage, 100);
 
-        // FIXED: Get parent width properly
+        // Get parent width properly
         int parentWidth = 0;
         if (progressBarParent != null) {
             parentWidth = progressBarParent.getWidth();
@@ -572,6 +761,25 @@ public class ReceiveFileActivity extends AppCompatActivity {
             }
         } catch (Exception e) {
             e.printStackTrace();
+        }
+
+        // Release locks
+        try {
+            if (wifiLock != null && wifiLock.isHeld()) {
+                wifiLock.release();
+                android.util.Log.d("ReceiveFile", "WiFi lock released");
+            }
+        } catch (Exception e) {
+            android.util.Log.e("ReceiveFile", "Error releasing WiFi lock: " + e.getMessage());
+        }
+
+        try {
+            if (wakeLock != null && wakeLock.isHeld()) {
+                wakeLock.release();
+                android.util.Log.d("ReceiveFile", "Wake lock released");
+            }
+        } catch (Exception e) {
+            android.util.Log.e("ReceiveFile", "Error releasing wake lock: " + e.getMessage());
         }
 
         executor.shutdownNow();
