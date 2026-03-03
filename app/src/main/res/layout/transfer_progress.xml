@@ -5,134 +5,132 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#2C3E5F"
+    android:background="@drawable/bg_screen_gradient"
     tools:context=".Activity.TransferProgressActivity">
 
-    <!-- Main Scrollable Container -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
-        app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintTop_toTopOf="parent">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:gravity="center"
             android:orientation="vertical"
-            android:padding="24dp"
-            android:gravity="center">
+            android:paddingStart="20dp"
+            android:paddingTop="28dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="24dp">
 
-            <!-- ============================================ -->
-            <!-- STATUS SECTION (Connecting/Initializing) -->
-            <!-- ============================================ -->
             <LinearLayout
                 android:id="@+id/statusSection"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
                 android:gravity="center"
+                android:orientation="vertical"
                 android:visibility="visible">
 
-                <!-- Spinner -->
                 <ProgressBar
                     android:id="@+id/progressSpinner"
-                    android:layout_width="80dp"
-                    android:layout_height="80dp"
+                    android:layout_width="74dp"
+                    android:layout_height="74dp"
                     android:indeterminate="true"
-                    android:indeterminateTint="#5B9FED"/>
+                    android:indeterminateTint="@color/accent_primary" />
 
-                <!-- Status Message -->
                 <TextView
                     android:id="@+id/tvStatusMessage"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:fontFamily="sans-serif-medium"
+                    android:gravity="center"
                     android:text="Connecting to receiver..."
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:textColor="#FFFFFF"
-                    android:layout_marginTop="24dp"
-                    android:gravity="center"/>
+                    android:textColor="@color/text_primary_light_bg"
+                    android:textSize="18sp" />
 
             </LinearLayout>
 
-            <!-- ============================================ -->
-            <!-- FILE INFO CARD -->
-            <!-- ============================================ -->
             <androidx.cardview.widget.CardView
                 android:id="@+id/fileInfoCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                app:cardCornerRadius="16dp"
-                app:cardBackgroundColor="#FFFFFF"
-                app:cardElevation="4dp">
+                app:cardBackgroundColor="@color/surface_light"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="8dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
                     android:orientation="horizontal"
-                    android:padding="16dp"
-                    android:gravity="center_vertical">
+                    android:paddingStart="16dp"
+                    android:paddingTop="16dp"
+                    android:paddingEnd="16dp"
+                    android:paddingBottom="16dp">
 
-                    <!-- File Preview Icon -->
                     <ImageView
                         android:id="@+id/ivFilePreview"
-                        android:layout_width="48dp"
-                        android:layout_height="48dp"
+                        android:layout_width="52dp"
+                        android:layout_height="52dp"
                         android:src="@drawable/ic_file_large"
-                        app:tint="#5B9FED"/>
+                        app:tint="@color/accent_primary" />
 
-                    <!-- File Details -->
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
+                        android:layout_marginStart="14dp"
                         android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:layout_marginStart="16dp">
+                        android:orientation="vertical">
 
                         <TextView
                             android:id="@+id/tvFileName"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="document.pdf"
-                            android:textSize="16sp"
-                            android:textStyle="bold"
-                            android:textColor="#2C3E5F"
+                            android:ellipsize="end"
+                            android:fontFamily="sans-serif-medium"
                             android:maxLines="2"
-                            android:ellipsize="end"/>
+                            android:text="document.pdf"
+                            android:textColor="@color/text_primary_light_bg"
+                            android:textSize="16sp" />
 
                         <LinearLayout
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:orientation="horizontal"
-                            android:layout_marginTop="4dp">
+                            android:layout_marginTop="5dp"
+                            android:orientation="horizontal">
 
                             <TextView
                                 android:id="@+id/tvFileSize"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif"
                                 android:text="2.5 MB"
-                                android:textSize="13sp"
-                                android:textColor="#8A9BAE"/>
+                                android:textColor="@color/text_secondary_light_bg"
+                                android:textSize="13sp" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text=" • "
-                                android:textSize="13sp"
-                                android:textColor="#8A9BAE"/>
+                                android:fontFamily="sans-serif"
+                                android:text="  |  "
+                                android:textColor="@color/text_secondary_light_bg"
+                                android:textSize="13sp" />
 
                             <TextView
                                 android:id="@+id/tvFileType"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
+                                android:fontFamily="sans-serif"
                                 android:text="PDF"
-                                android:textSize="13sp"
-                                android:textColor="#8A9BAE"
-                                android:textAllCaps="true"/>
+                                android:textAllCaps="true"
+                                android:textColor="@color/text_secondary_light_bg"
+                                android:textSize="13sp" />
 
                         </LinearLayout>
 
@@ -142,57 +140,58 @@
 
             </androidx.cardview.widget.CardView>
 
-            <!-- ============================================ -->
-            <!-- DEVICE INFO CARD -->
-            <!-- ============================================ -->
             <androidx.cardview.widget.CardView
                 android:id="@+id/deviceInfoCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                app:cardCornerRadius="16dp"
-                app:cardBackgroundColor="#3D5170"
-                app:cardElevation="4dp">
+                app:cardBackgroundColor="@color/surface_dark"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="6dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
                     android:orientation="horizontal"
-                    android:padding="16dp"
-                    android:gravity="center_vertical">
+                    android:paddingStart="16dp"
+                    android:paddingTop="15dp"
+                    android:paddingEnd="16dp"
+                    android:paddingBottom="15dp">
 
                     <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
+                        android:layout_width="25dp"
+                        android:layout_height="25dp"
                         android:src="@drawable/ic_phone"
-                        app:tint="#FFFFFF"/>
+                        app:tint="@color/text_primary_dark_bg" />
 
                     <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
                         android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:layout_marginStart="12dp">
+                        android:orientation="vertical">
 
                         <TextView
                             android:id="@+id/tvDeviceRole"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif-medium"
                             android:text="Receiver"
-                            android:textSize="12sp"
-                            android:textColor="#8A9BAE"/>
+                            android:textColor="@color/text_secondary_dark_bg"
+                            android:textSize="12sp" />
 
                         <TextView
                             android:id="@+id/tvDeviceName"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Android_456"
-                            android:textSize="15sp"
-                            android:textStyle="bold"
-                            android:textColor="#FFFFFF"
                             android:layout_marginTop="2dp"
+                            android:ellipsize="end"
+                            android:fontFamily="sans-serif-black"
                             android:maxLines="1"
-                            android:ellipsize="end"/>
+                            android:text="Android_456"
+                            android:textColor="@color/text_primary_dark_bg"
+                            android:textSize="15sp" />
 
                     </LinearLayout>
 
@@ -200,139 +199,137 @@
 
             </androidx.cardview.widget.CardView>
 
-            <!-- ============================================ -->
-            <!-- PROGRESS SECTION -->
-            <!-- ============================================ -->
             <androidx.cardview.widget.CardView
                 android:id="@+id/progressSection"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
+                android:layout_marginTop="20dp"
                 android:visibility="gone"
-                app:cardCornerRadius="16dp"
-                app:cardBackgroundColor="#FFFFFF"
-                app:cardElevation="4dp">
+                app:cardBackgroundColor="@color/surface_light"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="10dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:padding="20dp">
+                    android:padding="18dp">
 
-                    <!-- Progress Title -->
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-black"
                         android:text="Transfer Progress"
-                        android:textSize="16sp"
-                        android:textStyle="bold"
-                        android:textColor="#2C3E5F"/>
+                        android:textColor="@color/text_primary_light_bg"
+                        android:textSize="16sp" />
 
-                    <!-- Progress Bar Container -->
                     <FrameLayout
                         android:id="@+id/progressBarContainer"
                         android:layout_width="match_parent"
-                        android:layout_height="12dp"
-                        android:layout_marginTop="16dp"
+                        android:layout_height="10dp"
+                        android:layout_marginTop="14dp"
                         android:background="@drawable/progress_bg">
 
                         <View
                             android:id="@+id/progressBar"
                             android:layout_width="0dp"
                             android:layout_height="match_parent"
-                            android:background="@drawable/progress_filled"/>
+                            android:background="@drawable/progress_filled" />
 
                     </FrameLayout>
 
-                    <!-- Progress Percentage and Speed -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginTop="12dp">
+                        android:layout_marginTop="10dp"
+                        android:orientation="horizontal">
 
                         <TextView
                             android:id="@+id/tvProgressPercent"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
+                            android:fontFamily="sans-serif-black"
                             android:text="0%"
-                            android:textSize="18sp"
-                            android:textStyle="bold"
-                            android:textColor="#5B9FED"/>
+                            android:textColor="@color/accent_primary"
+                            android:textSize="20sp" />
 
                         <TextView
                             android:id="@+id/tvTransferSpeed"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif"
                             android:text="0 MB/s"
-                            android:textSize="14sp"
-                            android:textColor="#8A9BAE"/>
+                            android:textColor="@color/text_secondary_light_bg"
+                            android:textSize="14sp" />
 
                     </LinearLayout>
 
-                    <!-- Data Transferred -->
                     <TextView
                         android:id="@+id/tvProgressDetails"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:fontFamily="sans-serif"
                         android:text="0 MB / 2.5 MB"
-                        android:textSize="13sp"
-                        android:textColor="#8A9BAE"
-                        android:layout_marginTop="4dp"/>
+                        android:textColor="@color/text_secondary_light_bg"
+                        android:textSize="13sp" />
 
-                    <!-- Time Remaining -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
                         android:layout_marginTop="12dp"
-                        android:background="#F5F5F5"
-                        android:padding="12dp"
-                        android:gravity="center">
+                        android:background="@drawable/bg_section_soft"
+                        android:gravity="center"
+                        android:orientation="horizontal"
+                        android:paddingStart="12dp"
+                        android:paddingTop="10dp"
+                        android:paddingEnd="12dp"
+                        android:paddingBottom="10dp">
 
                         <ImageView
                             android:layout_width="16dp"
                             android:layout_height="16dp"
                             android:src="@drawable/ic_time"
-                            app:tint="#8A9BAE"/>
+                            app:tint="@color/text_secondary_light_bg" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Time remaining: "
-                            android:textSize="12sp"
-                            android:textColor="#8A9BAE"
-                            android:layout_marginStart="8dp"/>
+                            android:layout_marginStart="8dp"
+                            android:fontFamily="sans-serif"
+                            android:text="Time remaining:"
+                            android:textColor="@color/text_secondary_light_bg"
+                            android:textSize="12sp" />
 
                         <TextView
                             android:id="@+id/tvTimeRemaining"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:layout_marginStart="4dp"
+                            android:fontFamily="sans-serif-black"
                             android:text="Calculating..."
-                            android:textSize="12sp"
-                            android:textStyle="bold"
-                            android:textColor="#2C3E5F"/>
+                            android:textColor="@color/text_primary_light_bg"
+                            android:textSize="12sp" />
 
                     </LinearLayout>
 
-                    <!-- Cancel Button -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginTop="16dp"
-                        android:gravity="center">
+                        android:layout_marginTop="14dp"
+                        android:gravity="center"
+                        android:orientation="horizontal">
 
                         <androidx.cardview.widget.CardView
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            app:cardCornerRadius="20dp"
-                            app:cardBackgroundColor="#FF5252"
-                            app:cardElevation="4dp"
+                            android:layout_width="42dp"
+                            android:layout_height="42dp"
                             android:clickable="true"
                             android:focusable="true"
-                            android:foreground="?android:attr/selectableItemBackground">
+                            android:foreground="?android:attr/selectableItemBackground"
+                            app:cardBackgroundColor="@color/accent_error"
+                            app:cardCornerRadius="21dp"
+                            app:cardElevation="4dp">
 
                             <ImageView
                                 android:id="@+id/btnCancelTransfer"
@@ -340,17 +337,18 @@
                                 android:layout_height="20dp"
                                 android:layout_gravity="center"
                                 android:src="@drawable/ic_close"
-                                app:tint="#FFFFFF"/>
+                                app:tint="@color/white" />
 
                         </androidx.cardview.widget.CardView>
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:layout_marginStart="10dp"
+                            android:fontFamily="sans-serif-medium"
                             android:text="Cancel Transfer"
-                            android:textSize="14sp"
-                            android:textColor="#8A9BAE"
-                            android:layout_marginStart="12dp"/>
+                            android:textColor="@color/text_secondary_light_bg"
+                            android:textSize="14sp" />
 
                     </LinearLayout>
 
@@ -358,127 +356,118 @@
 
             </androidx.cardview.widget.CardView>
 
-            <!-- ============================================ -->
-            <!-- COMPLETION SECTION -->
-            <!-- ============================================ -->
             <LinearLayout
                 android:id="@+id/completionSection"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
+                android:layout_marginTop="22dp"
                 android:gravity="center"
-                android:visibility="gone"
-                android:layout_marginTop="24dp">
+                android:orientation="vertical"
+                android:visibility="gone">
 
-                <!-- Completion Icon -->
                 <FrameLayout
-                    android:layout_width="120dp"
-                    android:layout_height="120dp">
+                    android:layout_width="112dp"
+                    android:layout_height="112dp">
 
                     <androidx.cardview.widget.CardView
-                        android:layout_width="120dp"
-                        android:layout_height="120dp"
-                        app:cardCornerRadius="60dp"
-                        app:cardBackgroundColor="#4CAF50"
+                        android:layout_width="112dp"
+                        android:layout_height="112dp"
+                        app:cardBackgroundColor="@color/accent_success"
+                        app:cardCornerRadius="56dp"
                         app:cardElevation="8dp">
 
                         <ImageView
                             android:id="@+id/ivCompletionIcon"
-                            android:layout_width="60dp"
-                            android:layout_height="60dp"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
                             android:layout_gravity="center"
                             android:src="@drawable/ic_check"
-                            app:tint="#FFFFFF"/>
+                            app:tint="@color/white" />
 
                     </androidx.cardview.widget.CardView>
 
                 </FrameLayout>
 
-                <!-- Completion Message -->
                 <TextView
                     android:id="@+id/tvCompletionMessage"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:fontFamily="sans-serif-black"
+                    android:gravity="center"
                     android:text="Transfer Complete!"
-                    android:textSize="24sp"
-                    android:textStyle="bold"
-                    android:textColor="#FFFFFF"
-                    android:layout_marginTop="24dp"
-                    android:gravity="center"/>
+                    android:textColor="@color/text_primary_light_bg"
+                    android:textSize="24sp" />
 
-                <!-- Completion Details -->
                 <TextView
                     android:id="@+id/tvCompletionDetails"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="File sent successfully"
-                    android:textSize="14sp"
-                    android:textColor="#8A9BAE"
                     android:layout_marginTop="8dp"
+                    android:fontFamily="sans-serif"
                     android:gravity="center"
-                    android:paddingStart="32dp"
-                    android:paddingEnd="32dp"/>
+                    android:paddingStart="24dp"
+                    android:paddingEnd="24dp"
+                    android:text="File sent successfully"
+                    android:textColor="@color/text_secondary_light_bg"
+                    android:textSize="14sp" />
 
-                <!-- Action Buttons -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginTop="32dp"
-                    android:gravity="center">
+                    android:layout_marginTop="24dp"
+                    android:orientation="horizontal">
 
-                    <!-- View File Button (for receiver only) -->
                     <androidx.cardview.widget.CardView
                         android:id="@+id/btnViewFile"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:layout_marginEnd="8dp"
+                        android:layout_marginEnd="6dp"
                         android:visibility="gone"
-                        app:cardCornerRadius="25dp"
-                        app:cardBackgroundColor="#3D5170"
-                        app:cardElevation="4dp"
                         android:clickable="true"
                         android:focusable="true"
-                        android:foreground="?android:attr/selectableItemBackground">
+                        android:foreground="?android:attr/selectableItemBackground"
+                        app:cardBackgroundColor="@color/surface_dark"
+                        app:cardCornerRadius="24dp"
+                        app:cardElevation="6dp">
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="View File"
-                            android:textSize="15sp"
-                            android:textStyle="bold"
-                            android:textColor="#FFFFFF"
+                            android:fontFamily="sans-serif-medium"
                             android:gravity="center"
                             android:paddingTop="14dp"
-                            android:paddingBottom="14dp"/>
+                            android:paddingBottom="14dp"
+                            android:text="View File"
+                            android:textColor="@color/text_primary_dark_bg"
+                            android:textSize="15sp" />
 
                     </androidx.cardview.widget.CardView>
 
-                    <!-- Done Button -->
                     <androidx.cardview.widget.CardView
                         android:id="@+id/btnDone"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:layout_marginStart="8dp"
-                        app:cardCornerRadius="25dp"
-                        app:cardBackgroundColor="#4CAF50"
-                        app:cardElevation="6dp"
+                        android:layout_marginStart="6dp"
                         android:clickable="true"
                         android:focusable="true"
-                        android:foreground="?android:attr/selectableItemBackground">
+                        android:foreground="?android:attr/selectableItemBackground"
+                        app:cardBackgroundColor="@color/accent_success"
+                        app:cardCornerRadius="24dp"
+                        app:cardElevation="6dp">
 
                         <TextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Done"
-                            android:textSize="15sp"
-                            android:textStyle="bold"
-                            android:textColor="#FFFFFF"
+                            android:fontFamily="sans-serif-black"
                             android:gravity="center"
                             android:paddingTop="14dp"
-                            android:paddingBottom="14dp"/>
+                            android:paddingBottom="14dp"
+                            android:text="Done"
+                            android:textColor="@color/white"
+                            android:textSize="15sp" />
 
                     </androidx.cardview.widget.CardView>
 

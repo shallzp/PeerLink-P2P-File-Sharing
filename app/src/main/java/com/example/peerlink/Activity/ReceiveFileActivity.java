@@ -81,6 +81,7 @@ public class ReceiveFileActivity extends AppCompatActivity {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final AtomicBoolean isListening = new AtomicBoolean(false);
     private final AtomicBoolean isReceiving = new AtomicBoolean(false);
+    private final AtomicBoolean awaitingFileDataConnection = new AtomicBoolean(false);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -219,7 +220,7 @@ public class ReceiveFileActivity extends AppCompatActivity {
         }
 
         isListening.set(true);
-        updateConnectionStatus("Listening...", android.R.color.holo_orange_light);
+        updateConnectionStatus("Listening...", R.color.accent_warm);
 
         executor.execute(() -> {
             try {
@@ -230,7 +231,7 @@ public class ReceiveFileActivity extends AppCompatActivity {
 
                 mainHandler.post(() -> {
                     Toast.makeText(this, "Listening on port " + SERVER_PORT, Toast.LENGTH_SHORT).show();
-                    updateConnectionStatus("Ready", android.R.color.holo_green_dark);
+                    updateConnectionStatus("Ready", R.color.accent_success);
                     android.util.Log.d("ReceiveFile", "ServerSocket listening on port " + SERVER_PORT +
                             ". Buffer: " + BUFFER_SIZE + " bytes, Socket buffer: " + SOCKET_BUFFER_SIZE + " bytes");
                 });
@@ -249,7 +250,7 @@ public class ReceiveFileActivity extends AppCompatActivity {
                     android.util.Log.d("ReceiveFile", "Client connected with matched socket settings");
 
                     mainHandler.post(() ->
-                            updateConnectionStatus("Connected", android.R.color.holo_green_dark));
+                            updateConnectionStatus("Connected", R.color.accent_success));
 
                     // Handle the incoming connection
                     handleIncomingConnection(clientSocket);
@@ -262,7 +263,7 @@ public class ReceiveFileActivity extends AppCompatActivity {
                     mainHandler.post(() -> {
                         Toast.makeText(this, "Socket error: " + e.getMessage(),
                                 Toast.LENGTH_LONG).show();
-                        updateConnectionStatus("Error", android.R.color.holo_red_dark);
+                        updateConnectionStatus("Error", R.color.accent_error);
                     });
                 }
             } catch (Exception e) {
@@ -272,7 +273,7 @@ public class ReceiveFileActivity extends AppCompatActivity {
                     mainHandler.post(() -> {
                         Toast.makeText(this, "Error listening: " + e.getMessage(),
                                 Toast.LENGTH_LONG).show();
-                        updateConnectionStatus("Error", android.R.color.holo_red_dark);
+                        updateConnectionStatus("Error", R.color.accent_error);
                     });
                 }
             }
@@ -281,20 +282,30 @@ public class ReceiveFileActivity extends AppCompatActivity {
 
     private void handleIncomingConnection(Socket socket) {
         executor.execute(() -> {
+            DataInputStream localInputStream = null;
+            DataOutputStream localOutputStream = null;
             try {
-                // Store streams as class members
-                dataInputStream = new DataInputStream(socket.getInputStream());
-                dataOutputStream = new DataOutputStream(socket.getOutputStream());
+                localInputStream = new DataInputStream(socket.getInputStream());
+                localOutputStream = new DataOutputStream(socket.getOutputStream());
+
+                // Store active connection
+                synchronized (this) {
+                    clientSocket = socket;
+                    dataInputStream = localInputStream;
+                    dataOutputStream = localOutputStream;
+                }
 
                 // Read message type
-                String messageType = dataInputStream.readUTF();
+                String messageType = localInputStream.readUTF();
 
                 if ("FILE_METADATA".equals(messageType)) {
+                    awaitingFileDataConnection.set(false);
+
                     // Read file metadata
-                    incomingFileName = dataInputStream.readUTF();
-                    incomingFileSize = dataInputStream.readLong();
-                    incomingFileType = dataInputStream.readUTF();
-                    senderDeviceName = dataInputStream.readUTF();
+                    incomingFileName = localInputStream.readUTF();
+                    incomingFileSize = localInputStream.readLong();
+                    incomingFileType = localInputStream.readUTF();
+                    senderDeviceName = localInputStream.readUTF();
 
                     android.util.Log.d("ReceiveFile", "Metadata received: " + incomingFileName +
                             ", Size: " + incomingFileSize + " bytes (" + formatFileSize(incomingFileSize) + ")" +
@@ -312,15 +323,29 @@ public class ReceiveFileActivity extends AppCompatActivity {
                     mainHandler.post(() -> displayIncomingFile());
 
                     // Keep socket and streams open for accept/reject
+                } else if ("FILE_DATA".equals(messageType)) {
+                    if (!awaitingFileDataConnection.get()) {
+                        throw new Exception("Unexpected file data connection. Accept the file first.");
+                    }
+
+                    awaitingFileDataConnection.set(false);
+                    android.util.Log.d("ReceiveFile", "FILE_DATA connection received. Starting transfer...");
+                    receiveFile();
+                } else {
+                    throw new Exception("Unknown message type: " + messageType);
                 }
 
             } catch (Exception e) {
                 e.printStackTrace();
-                android.util.Log.e("ReceiveFile", "Error receiving metadata: " + e.getMessage());
+                final String errorMsg = e.getMessage() != null ? e.getMessage() : "Unexpected connection error";
+                android.util.Log.e("ReceiveFile", "Error handling incoming connection: " + errorMsg);
+
+                closeConnection(socket, localInputStream, localOutputStream);
+                clearActiveConnectionIfMatches(socket, localInputStream, localOutputStream);
+
                 mainHandler.post(() -> {
-                    Toast.makeText(this, "Error receiving metadata: " + e.getMessage(),
+                    Toast.makeText(this, "Error receiving data: " + errorMsg,
                             Toast.LENGTH_LONG).show();
-                    closeSocket();
                     showWaitingState();
                     startListeningForFile();
                 });
@@ -348,61 +373,45 @@ public class ReceiveFileActivity extends AppCompatActivity {
         btnStartReceiving.setEnabled(false);
 
         executor.execute(() -> {
+            Socket metadataSocket;
+            DataInputStream metadataInput;
+            DataOutputStream metadataOutput;
+
+            synchronized (this) {
+                metadataSocket = clientSocket;
+                metadataInput = dataInputStream;
+                metadataOutput = dataOutputStream;
+            }
+
             try {
                 // Validate streams
-                if (dataOutputStream == null || clientSocket == null || clientSocket.isClosed()) {
+                if (metadataOutput == null || metadataSocket == null || metadataSocket.isClosed()) {
                     throw new Exception("Connection lost. Please try again.");
                 }
 
                 // Send ACCEPT response to sender
-                dataOutputStream.writeUTF("ACCEPT");
-                dataOutputStream.flush();
+                metadataOutput.writeUTF("ACCEPT");
+                metadataOutput.flush();
+                awaitingFileDataConnection.set(true);
                 android.util.Log.d("ReceiveFile", "Sent ACCEPT response");
 
                 mainHandler.post(() -> {
-                    Toast.makeText(this, "Accepted! Waiting for file...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Accepted! Waiting for sender...", Toast.LENGTH_SHORT).show();
                     showReceivingState();
                     tvProgressFileName.setText(incomingFileName);
                 });
 
-                // IMPORTANT: Close the metadata socket
-                closeSocket();
-                android.util.Log.d("ReceiveFile", "Closed metadata socket, waiting for new connection...");
+                // Close only metadata connection. Listener thread will handle incoming FILE_DATA socket.
+                closeConnection(metadataSocket, metadataInput, metadataOutput);
+                clearActiveConnectionIfMatches(metadataSocket, metadataInput, metadataOutput);
+                android.util.Log.d("ReceiveFile", "Closed metadata socket, waiting for FILE_DATA connection...");
 
-                // Wait for NEW connection from TransferProgressActivity
-                clientSocket = serverSocket.accept();
-
-                // MATCHED: Configure new socket with same settings as sender
-                int dynamicTimeout = calculateDynamicTimeout(incomingFileSize);
-                clientSocket.setReceiveBufferSize(SOCKET_BUFFER_SIZE); // 256 KB
-                clientSocket.setSendBufferSize(SOCKET_BUFFER_SIZE);    // 256 KB
-                clientSocket.setTcpNoDelay(false);                     // Enable Nagle's algorithm (MATCHED)
-                clientSocket.setKeepAlive(true);                        // Enable TCP keep-alive
-                clientSocket.setSoTimeout(dynamicTimeout);              // Dynamic timeout
-                clientSocket.setSoLinger(true, 0);                     // Immediate close (MATCHED)
-
-                android.util.Log.d("ReceiveFile", "New connection accepted. " +
-                        "Buffer: " + BUFFER_SIZE + " bytes, " +
-                        "Socket buffer: " + SOCKET_BUFFER_SIZE + " bytes, " +
-                        "Timeout: " + (dynamicTimeout / 1000) + " seconds");
-
-                // Create new streams for the new connection
-                dataInputStream = new DataInputStream(clientSocket.getInputStream());
-                dataOutputStream = new DataOutputStream(clientSocket.getOutputStream());
-
-                // Wait for FILE_DATA marker from sender
-                String dataMarker = dataInputStream.readUTF();
-                android.util.Log.d("ReceiveFile", "Received marker: " + dataMarker);
-
-                if ("FILE_DATA".equals(dataMarker)) {
-                    // Start receiving the actual file
-                    receiveFile();
-                } else {
-                    throw new Exception("Invalid data marker received: " + dataMarker + ". Expected: FILE_DATA");
-                }
+                mainHandler.post(() ->
+                        updateConnectionStatus("Waiting for sender...", R.color.accent_warm));
 
             } catch (NullPointerException e) {
                 e.printStackTrace();
+                awaitingFileDataConnection.set(false);
                 final String errorMsg = "Internal error: " + (e.getMessage() != null ? e.getMessage() :
                         "Null pointer - connection lost");
                 android.util.Log.e("ReceiveFile", "NullPointerException in accept: " + errorMsg);
@@ -412,7 +421,13 @@ public class ReceiveFileActivity extends AppCompatActivity {
                 });
             } catch (Exception e) {
                 e.printStackTrace();
-                final String errorMsg = e.getMessage() != null ? e.getMessage() : "Unknown error occurred";
+                awaitingFileDataConnection.set(false);
+                final String errorMsg;
+                if (e.getMessage() != null && !e.getMessage().trim().isEmpty()) {
+                    errorMsg = e.getMessage();
+                } else {
+                    errorMsg = "Unexpected error (" + e.getClass().getSimpleName() + ")";
+                }
                 android.util.Log.e("ReceiveFile", "Error accepting file: " + errorMsg);
                 mainHandler.post(() -> {
                     Toast.makeText(this, "Error accepting file: " + errorMsg,
@@ -566,7 +581,7 @@ public class ReceiveFileActivity extends AppCompatActivity {
                     updateProgress(incomingFileSize, totalTime);
                     tvProgressPercent.setText("100%");
                     tvProgressPercent.setTextColor(
-                            getResources().getColor(android.R.color.holo_green_dark));
+                            getResources().getColor(R.color.accent_success));
                     mainHandler.postDelayed(this::resetToWaitingState, 3000);
                 });
             } else {
@@ -693,8 +708,7 @@ public class ReceiveFileActivity extends AppCompatActivity {
         incomingFileName = "";
         incomingFileSize = 0;
         incomingFileType = "";
-        dataInputStream = null;
-        dataOutputStream = null;
+        awaitingFileDataConnection.set(false);
 
         closeSocket();
         showWaitingState();
@@ -704,15 +718,44 @@ public class ReceiveFileActivity extends AppCompatActivity {
     }
 
     private void closeSocket() {
+        Socket socketToClose;
+        DataInputStream inputToClose;
+        DataOutputStream outputToClose;
+
+        synchronized (this) {
+            socketToClose = clientSocket;
+            inputToClose = dataInputStream;
+            outputToClose = dataOutputStream;
+            clientSocket = null;
+            dataInputStream = null;
+            dataOutputStream = null;
+        }
+
+        closeConnection(socketToClose, inputToClose, outputToClose);
+    }
+
+    private synchronized void clearActiveConnectionIfMatches(Socket socket, DataInputStream input, DataOutputStream output) {
+        if (clientSocket == socket) {
+            clientSocket = null;
+        }
+        if (dataInputStream == input) {
+            dataInputStream = null;
+        }
+        if (dataOutputStream == output) {
+            dataOutputStream = null;
+        }
+    }
+
+    private void closeConnection(Socket socket, DataInputStream input, DataOutputStream output) {
         try {
-            if (dataInputStream != null) {
-                dataInputStream.close();
+            if (input != null) {
+                input.close();
             }
-            if (dataOutputStream != null) {
-                dataOutputStream.close();
+            if (output != null) {
+                output.close();
             }
-            if (clientSocket != null && !clientSocket.isClosed()) {
-                clientSocket.close();
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
             }
         } catch (Exception e) {
             e.printStackTrace();

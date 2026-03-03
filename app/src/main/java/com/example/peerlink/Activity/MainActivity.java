@@ -4,15 +4,18 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.widget.Toast;
+import android.widget.ImageView;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.cardview.widget.CardView;
 
 import com.example.peerlink.R;
+import com.example.peerlink.Utils.ThemeManager;
 
 public class MainActivity extends AppCompatActivity {
 
-    private CardView cardDiscoverDevices, cardSendFile, cardReceiveFile;
+    private CardView cardDiscoverDevices, cardSendFile, cardReceiveFile, btnThemeToggle;
+    private ImageView ivThemeToggle;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -22,6 +25,8 @@ public class MainActivity extends AppCompatActivity {
         cardDiscoverDevices = findViewById(R.id.cardDiscoverDevices);
         cardSendFile = findViewById(R.id.cardSendFile);
         cardReceiveFile = findViewById(R.id.cardReceiveFile);
+        btnThemeToggle = findViewById(R.id.btnThemeToggle);
+        ivThemeToggle = findViewById(R.id.ivThemeToggle);
 
         cardDiscoverDevices.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, AvailableDevicesActivity.class);
@@ -49,6 +54,20 @@ public class MainActivity extends AppCompatActivity {
                 startActivity(intent);
             }
         });
+
+        updateThemeToggleIcon();
+        btnThemeToggle.setOnClickListener(v -> {
+            ThemeManager.toggleTheme(this);
+            updateThemeToggleIcon();
+        });
+    }
+
+    private void updateThemeToggleIcon() {
+        if (ThemeManager.isDarkMode(this)) {
+            ivThemeToggle.setImageResource(R.drawable.ic_theme_sun);
+        } else {
+            ivThemeToggle.setImageResource(R.drawable.ic_theme_moon);
+        }
     }
 
     private boolean isDeviceConnected() {

@@ -256,15 +256,15 @@ public class TransferProgressActivity extends AppCompatActivity {
 
         if (success) {
             ivCompletionIcon.setImageResource(R.drawable.ic_check);
-            ivCompletionIcon.setColorFilter(getResources().getColor(android.R.color.holo_green_dark));
+            ivCompletionIcon.setColorFilter(getResources().getColor(R.color.accent_success));
             tvCompletionMessage.setText(message);
-            tvCompletionMessage.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
+            tvCompletionMessage.setTextColor(getResources().getColor(R.color.accent_success));
             btnViewFile.setVisibility(isSender ? View.GONE : View.VISIBLE);
         } else {
             ivCompletionIcon.setImageResource(R.drawable.ic_error);
-            ivCompletionIcon.setColorFilter(getResources().getColor(android.R.color.holo_red_dark));
+            ivCompletionIcon.setColorFilter(getResources().getColor(R.color.accent_error));
             tvCompletionMessage.setText(message);
-            tvCompletionMessage.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
+            tvCompletionMessage.setTextColor(getResources().getColor(R.color.accent_error));
             btnViewFile.setVisibility(View.GONE);
         }
 
@@ -532,7 +532,7 @@ public class TransferProgressActivity extends AppCompatActivity {
 
         // If complete, show completion message
         if (percentage >= 100) {
-            tvProgressPercent.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
+            tvProgressPercent.setTextColor(getResources().getColor(R.color.accent_success));
             tvTimeRemaining.setText("Complete");
         }
     }

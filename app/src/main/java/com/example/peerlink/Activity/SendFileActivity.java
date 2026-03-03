@@ -135,7 +135,7 @@ public class SendFileActivity extends AppCompatActivity {
         tvReceiverName.setText(connectedDeviceName);
         tvReceiverStatus.setText("Ready to receive");
         tvConnectionStatus.setText("Connected");
-        statusBadge.setCardBackgroundColor(getResources().getColor(android.R.color.holo_green_dark));
+        statusBadge.setCardBackgroundColor(getResources().getColor(R.color.accent_success));
     }
 
     private void setupListeners() {
@@ -240,7 +240,7 @@ public class SendFileActivity extends AppCompatActivity {
         tvFileSize.setText(formatFileSize(fileSize));
         tvFileType.setText(fileType.toUpperCase());
         tvFileStatus.setText("Ready");
-        tvFileStatus.setTextColor(getResources().getColor(android.R.color.holo_green_dark));
+        tvFileStatus.setTextColor(getResources().getColor(R.color.accent_success));
 
         // Set file icon based on type
         setFileIcon(fileType);
@@ -257,7 +257,7 @@ public class SendFileActivity extends AppCompatActivity {
         btnStartTransfer.setAlpha(0.5f);
         tvReceiverStatus.setText("Ready to receive");
         statusIndicator.setBackgroundTintList(
-                getResources().getColorStateList(android.R.color.holo_orange_light));
+                getResources().getColorStateList(R.color.accent_warm));
     }
 
     private void enableStartTransfer() {
@@ -328,7 +328,7 @@ public class SendFileActivity extends AppCompatActivity {
                                         Toast.LENGTH_LONG).show();
                                 btnStartTransfer.setEnabled(true);
                                 statusIndicator.setBackgroundTintList(
-                                        getResources().getColorStateList(android.R.color.holo_red_dark));
+                                        getResources().getColorStateList(R.color.accent_error));
                             });
                             return;
                         }
@@ -353,7 +353,7 @@ public class SendFileActivity extends AppCompatActivity {
                                         Toast.LENGTH_LONG).show();
                                 btnStartTransfer.setEnabled(true);
                                 statusIndicator.setBackgroundTintList(
-                                        getResources().getColorStateList(android.R.color.holo_red_dark));
+                                        getResources().getColorStateList(R.color.accent_error));
                             });
                             return;
                         }
@@ -397,7 +397,7 @@ public class SendFileActivity extends AppCompatActivity {
                 mainHandler.post(() -> {
                     updateReceiverStatus("Waiting for response...");
                     statusIndicator.setBackgroundTintList(
-                            getResources().getColorStateList(android.R.color.holo_orange_light));
+                            getResources().getColorStateList(R.color.accent_warm));
                 });
 
                 // Wait for receiver's response (ACCEPT or REJECT)
@@ -409,7 +409,7 @@ public class SendFileActivity extends AppCompatActivity {
                         isReceiverReady = true;
                         updateReceiverStatus("Accepted! Starting transfer...");
                         statusIndicator.setBackgroundTintList(
-                                getResources().getColorStateList(android.R.color.holo_green_dark));
+                                getResources().getColorStateList(R.color.accent_success));
 
                         // Start actual file transfer in new activity
                         startFileTransfer();
@@ -418,7 +418,7 @@ public class SendFileActivity extends AppCompatActivity {
                     mainHandler.post(() -> {
                         updateReceiverStatus("Transfer rejected");
                         statusIndicator.setBackgroundTintList(
-                                getResources().getColorStateList(android.R.color.holo_red_dark));
+                                getResources().getColorStateList(R.color.accent_error));
                         Toast.makeText(this, "Receiver rejected the file", Toast.LENGTH_LONG).show();
                         btnStartTransfer.setEnabled(true);
                     });
@@ -433,7 +433,7 @@ public class SendFileActivity extends AppCompatActivity {
                     Toast.makeText(this, "Error: " + errorMsg, Toast.LENGTH_LONG).show();
                     btnStartTransfer.setEnabled(true);
                     statusIndicator.setBackgroundTintList(
-                            getResources().getColorStateList(android.R.color.holo_red_dark));
+                            getResources().getColorStateList(R.color.accent_error));
                 });
             } finally {
                 // Close all resources in finally block

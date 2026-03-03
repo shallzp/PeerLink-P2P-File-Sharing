@@ -7,20 +7,20 @@
 
     <!-- Clock Circle -->
     <path
-        android:strokeColor="#8A9BAE"
+        android:strokeColor="@color/text_secondary_light_bg"
         android:strokeWidth="2"
         android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zm0,18c,-4.41 0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8z"/>
 
     <!-- Hour Hand -->
     <path
-        android:strokeColor="#8A9BAE"
+        android:strokeColor="@color/text_secondary_light_bg"
         android:strokeWidth="2"
         android:strokeLineCap="round"
         android:pathData="M12,6l0,6"/>
 
     <!-- Minute Hand -->
     <path
-        android:strokeColor="#8A9BAE"
+        android:strokeColor="@color/text_secondary_light_bg"
         android:strokeWidth="2"
         android:strokeLineCap="round"
         android:pathData="M12,12l4,0"/>
